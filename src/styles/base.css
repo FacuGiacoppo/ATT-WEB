@@ -1,0 +1,116 @@
+:root {
+  --ink: #1a1a2e;
+  --ink-light: #3d3d5c;
+  --ink-muted: #8888a8;
+  --paper: #f5f3ee;
+  --paper-warm: #ede9e0;
+  --accent: #c8472a;
+  --accent-light: #e8654a;
+  --danger: #b93b25;
+  --danger-light: #d85238;
+  --radius: 8px;
+  --radius-lg: 14px;
+  --shadow: 0 2px 12px rgba(26, 26, 46, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "DM Sans", sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  background: var(--accent-light);
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--ink);
+  border: 1px solid rgba(26, 26, 46, 0.14);
+  border-radius: 12px;
+  padding: 12px 18px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: 0.2s ease;
+}
+
+.btn-danger:hover {
+  background: var(--danger-light);
+}
+
+/* Errores de arranque / render (evita pantalla blanca sin pista) */
+.boot-fatal {
+  max-width: 720px;
+  margin: 2rem auto;
+  padding: 1.5rem 1.75rem;
+  background: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(26, 26, 46, 0.1);
+}
+
+.boot-fatal-title {
+  font-family: "DM Serif Display", serif;
+  font-size: 1.35rem;
+  margin: 0 0 0.75rem;
+  color: var(--ink);
+}
+
+.boot-fatal-hint {
+  margin: 0 0 1rem;
+  color: var(--ink-light);
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.boot-fatal-hint code {
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  background: var(--paper-warm);
+  border-radius: 4px;
+}
+
+.boot-fatal-pre {
+  margin: 0;
+  padding: 1rem;
+  background: #1a1a2e;
+  color: #e8e8f0;
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow: auto;
+  max-height: 50vh;
+}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>ESTUDIO-ATT</title>
+    <!-- Subí el número en ?v= para forzar recarga de CSS/JS (cache bust) -->
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./src/styles/base.css?v=20260330-13" />
+    <link rel="stylesheet" href="./src/styles/layout.css?v=20260330-13" />
+    <link rel="stylesheet" href="./src/styles/requerimientos.css?v=20260330-13" />
+    <link rel="stylesheet" href="./src/styles/clientes.css?v=20260330-13" />
+    <link rel="stylesheet" href="./src/styles/operaciones.css?v=20260330-13" />
+    <link rel="stylesheet" href="./src/styles/estado-resultados.css?v=20260402-7" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <!-- SheetJS import; ExcelJS plantilla con listas desplegables (Central de operaciones) -->
+    <!-- async: no bloquean el arranque de la app; ExcelJS/SheetJS se usan al importar/descargar plantilla -->
+    <script async src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <!-- MSAL (Microsoft login) para enviar emails por Graph -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
+
+    <script type="module" src="./src/main.js?v=20260402-8"></script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Credenciales Firebase Admin (¡NUNCA subir!)
+serviceAccountKey.json
+*serviceAccount*.json
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+
+# Archivos Excel con datos personales
+Vencimientos/*.xlsx
+Vencimientos/*.xls

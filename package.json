@@ -1,0 +1,8 @@
+{
+  "name": "att-web",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes serve@14 . -l 3000 -s",
+    "dev": "npx --yes serve@14 . -l 3000 -s"
+  }
+}
