@@ -19,40 +19,62 @@ let percentVisible = true;
 /** Base numérica del EERR (sin filtro de rubros); se actualiza al cambiar períodos. */
 let lastEerrBase = null;
 
-import { storage, db } from "../../config/firebase.js";
-import { ref as storageRef, uploadBytes, getBytes } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-storage.js";
+import { db } from "../../config/firebase.js";
 import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
-const EERR_STORAGE_PATH = "eerr/latest.xlsx";
-const EERR_META_DOC = "eerr/latest";
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T/;
 
-async function uploadEerrToStorage(buf, uploaderName) {
-  const fileRef = storageRef(storage, EERR_STORAGE_PATH);
-  await uploadBytes(fileRef, buf);
-  const [col, docId] = EERR_META_DOC.split("/");
-  await setDoc(doc(db, col, docId), {
-    uploadedBy: uploaderName,
-    uploadedAt: serverTimestamp(),
+function serializeRows(rows) {
+  return rows.map((row) => {
+    const out = {};
+    for (const [k, v] of Object.entries(row)) {
+      out[k] = v instanceof Date ? v.toISOString() : v;
+    }
+    return out;
   });
 }
 
-async function loadEerrFromStorage() {
-  try {
-    const fileRef = storageRef(storage, EERR_STORAGE_PATH);
-    const bytes = await getBytes(fileRef);
-    return bytes;
-  } catch (e) {
-    if (e.code !== "storage/object-not-found") {
-      console.warn("EERR: error al descargar desde Storage", e);
+function deserializeRows(rows) {
+  return rows.map((row) => {
+    const out = {};
+    for (const [k, v] of Object.entries(row)) {
+      out[k] = typeof v === "string" && ISO_RE.test(v) ? new Date(v) : v;
     }
+    return out;
+  });
+}
+
+async function saveEerrToFirestore(ingRows, egrRows, uploaderName) {
+  await Promise.all([
+    setDoc(doc(db, "eerr", "ingresos"), { rows: serializeRows(ingRows) }),
+    setDoc(doc(db, "eerr", "egresos"), { rows: serializeRows(egrRows) }),
+    setDoc(doc(db, "eerr", "meta"), {
+      uploadedBy: uploaderName,
+      uploadedAt: serverTimestamp(),
+    }),
+  ]);
+}
+
+async function loadEerrFromFirestore() {
+  try {
+    const [ingSnap, egrSnap] = await Promise.all([
+      getDoc(doc(db, "eerr", "ingresos")),
+      getDoc(doc(db, "eerr", "egresos")),
+    ]);
+    if (!ingSnap.exists() && !egrSnap.exists()) return null;
+    return {
+      ingRows: deserializeRows(ingSnap.exists() ? ingSnap.data().rows : []),
+      egrRows: deserializeRows(egrSnap.exists() ? egrSnap.data().rows : []),
+    };
+  } catch (e) {
+    console.warn("EERR: error al cargar desde Firestore", e);
     return null;
   }
 }
 
 async function loadEerrMeta() {
   try {
-    const [col, docId] = EERR_META_DOC.split("/");
-    const snap = await getDoc(doc(db, col, docId));
+    const snap = await getDoc(doc(db, "eerr", "meta"));
     return snap.exists() ? snap.data() : null;
   } catch {
     return null;
@@ -109,19 +131,10 @@ export function initEstadoResultadosPage(user) {
   renderListBody("EGRESOS", []);
 
   void (async () => {
-    const [xlsxReady, meta, bytes] = await Promise.all([
-      waitForXlsx(),
-      loadEerrMeta(),
-      loadEerrFromStorage(),
-    ]);
+    const [meta, data] = await Promise.all([loadEerrMeta(), loadEerrFromFirestore()]);
     setEerrSubtitle(meta, canUpload);
-    if (!xlsxReady || !bytes) return;
-    try {
-      const wb = window.XLSX.read(bytes, { type: "array", cellDates: true });
-      loadFromWorkbook(wb);
-    } catch (e) {
-      console.warn("EERR: archivo en Storage inválido o corrupto", e);
-    }
+    if (!data) return;
+    loadFromRows(data.ingRows, data.egrRows);
   })();
 }
 
@@ -158,12 +171,13 @@ function wireXlsxInput(user) {
     }
     loadFromWorkbook(wb);
     try {
-      await uploadEerrToStorage(buf, user?.name ?? user?.email ?? "superadmin");
+      const uploaderName = user?.name ?? user?.email ?? "superadmin";
+      await saveEerrToFirestore(LIST_STATE.INGRESOS.rows, LIST_STATE.EGRESOS.rows, uploaderName);
       const meta = await loadEerrMeta();
       setEerrSubtitle(meta, true);
     } catch (e) {
-      console.error("EERR: error al subir a Storage", e);
-      alert("El Excel se visualizó correctamente pero no se pudo guardar en la nube. Revisá los permisos de Storage.");
+      console.error("EERR: error al guardar en Firestore", e);
+      alert("El Excel se visualizó pero no se pudo guardar en la nube. Revisá tu conexión.");
     }
   });
 }
@@ -1078,6 +1092,22 @@ function buildSectionsFromBase(base, visible) {
 
   markExpenseOnSections(sections);
   return sections;
+}
+
+function loadFromRows(ingRows, egrRows) {
+  LIST_STATE.INGRESOS.rows = ingRows;
+  LIST_STATE.EGRESOS.rows = egrRows;
+  applyListFilter("INGRESOS");
+  applyListFilter("EGRESOS");
+  const all = collectAvailableMonths(ingRows, egrRows);
+  renderPeriodFilterChips(all);
+  if (!all.length) {
+    lastEerrBase = null;
+    renderRubroFilterChips(null);
+    renderEerr({ months: [], sections: [] });
+    return;
+  }
+  applyPeriodFilterFromDom();
 }
 
 function loadFromWorkbook(wb) {
