@@ -2,32 +2,131 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /requirements/{document=**} {
-      allow read, write: if request.auth != null;
+    // =========================
+    // HELPERS
+    // =========================
+
+    function isLogged() {
+      return request.auth != null;
     }
 
-    match /users/{document=**} {
-      allow read, write: if request.auth != null;
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    // Clientes + subcolecciones (por ejemplo: /clientes/{id}/contactos/*)
-    match /clientes/{document=**} {
-      allow read, write: if request.auth != null;
+    function isSuperadmin() {
+      return isLogged() && getUserRole() == "superadmin";
     }
 
-    // Trazabilidad de cumplimientos (cumplimentación de tareas/obligaciones)
-    match /cumplimientos/{document=**} {
-      allow read, write: if request.auth != null;
+    function isAdmin() {
+      return isLogged() &&
+        (getUserRole() == "superadmin" || getUserRole() == "admin");
     }
 
-    match /operaciones/{document=**} {
-      allow read, write: if request.auth != null;
+    function canColab() {
+      return isLogged() &&
+        (getUserRole() == "superadmin" ||
+         getUserRole() == "admin" ||
+         getUserRole() == "colaborador");
     }
 
-    // Metadata del Estado de Resultados (uploadedBy, uploadedAt)
-    match /eerr/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    // =========================
+    // USERS
+    // =========================
+
+    match /users/{userId} {
+
+      allow read: if isLogged();
+
+      allow update: if isSuperadmin()
+        ||
+        (
+          isLogged() &&
+          request.auth.uid == userId &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(["lastLoginAt"])
+        );
+
+      allow create, delete: if false;
+    }
+
+    // =========================
+    // REQUIREMENTS
+    // =========================
+
+    match /requirements/{docId} {
+
+      allow read: if isLogged();
+
+      allow create: if canColab();
+
+      allow update: if canColab();
+
+      allow delete: if isAdmin();
+    }
+
+    // =========================
+    // OPERACIONES (obligaciones / tareas)
+    // =========================
+
+    match /operaciones/{docId} {
+
+      allow read: if isLogged();
+
+      allow create: if canColab();
+
+      allow update: if canColab();
+
+      allow delete: if isAdmin();
+    }
+
+    // =========================
+    // CUMPLIMIENTOS (trazabilidad)
+    // =========================
+
+    match /cumplimientos/{docId} {
+
+      allow read: if isLogged();
+
+      // Guardado del registro al cumplimentar
+      allow create: if canColab();
+
+      // En MVP no editamos ni borramos cumplimientos
+      allow update, delete: if false;
+    }
+
+    // =========================
+    // CLIENTES
+    // =========================
+
+    match /clientes/{docId} {
+
+      allow read: if canColab();
+      allow create: if canColab();
+      allow update: if canColab();
+
+      // Solo superadmin puede eliminar
+      allow delete: if isSuperadmin();
+    }
+
+    // Subcolección: contactos por cliente
+    match /clientes/{clienteId}/contactos/{contactoId} {
+      allow read: if canColab();
+      allow create: if canColab();
+      allow update: if canColab();
+      allow delete: if canColab();
+    }
+
+    // =========================
+    // ESTADO DE RESULTADOS (metadata)
+    // =========================
+
+    match /eerr/{docId} {
+
+      // Todos los autenticados pueden leer (para ver fecha/autor de la última subida)
+      allow read: if isLogged();
+
+      // Solo superadmin puede escribir (registrar una nueva subida)
+      allow write: if isSuperadmin();
     }
   }
 }
