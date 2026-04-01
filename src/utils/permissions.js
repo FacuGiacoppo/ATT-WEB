@@ -58,6 +58,10 @@ export function canAccessEstadoResultados(user) {
   return role === "admin" || role === "superadmin";
 }
 
+export function canUploadEerr(user) {
+  return getCurrentRole(user) === "superadmin";
+}
+
 export function canCreateOperacion(user) {
   const role = getCurrentRole(user);
   return role === "superadmin" || role === "admin" || role === "colaborador";

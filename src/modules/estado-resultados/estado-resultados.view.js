@@ -1,17 +1,18 @@
-export function renderEstadoResultadosView() {
+export function renderEstadoResultadosView(canUpload = false) {
   return `
     <section class="page-section">
       <header class="page-header">
         <div>
           <h1 class="page-title">Estado de Resultados ATT</h1>
-          <p class="page-subtitle" id="eerr-page-subtitle">Cargá el Excel y visualizá el EERR, ingresos y egresos.</p>
+          <p class="page-subtitle" id="eerr-page-subtitle">Cargando datos...</p>
         </div>
+        ${canUpload ? `
         <div class="eerr-toolbar">
           <label class="eerr-file">
-            <span class="eerr-file-label">Excel</span>
+            <span class="eerr-file-label">Actualizar Excel</span>
             <input type="file" id="eerr-xlsx-input" accept=".xlsx,.xls" />
           </label>
-        </div>
+        </div>` : ""}
       </header>
 
       <div class="eerr-period-bar" id="eerr-period-bar" hidden>
@@ -57,9 +58,7 @@ export function renderEstadoResultadosView() {
             <tbody id="eerr-table-body"></tbody>
           </table>
         </div>
-        <div class="eerr-hint">
-          Nota: para que cargue el Excel, ejecutá la app con <code>npm run start</code> y abrí <code>http://localhost:3000</code>.
-        </div>
+        <div class="eerr-hint" id="eerr-hint" hidden></div>
       </div>
 
       <div class="eerr-panel" data-eerr-panel="ingresos">

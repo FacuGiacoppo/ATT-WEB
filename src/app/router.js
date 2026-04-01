@@ -14,7 +14,7 @@ import {
 } from "../modules/operaciones/operaciones.controller.js";
 import { renderEstadoResultadosView } from "../modules/estado-resultados/estado-resultados.view.js";
 import { initEstadoResultadosPage } from "../modules/estado-resultados/estado-resultados.controller.js";
-import { canAccessCentralOperaciones, canAccessEstadoResultados } from "../utils/permissions.js";
+import { canAccessCentralOperaciones, canAccessEstadoResultados, canUploadEerr } from "../utils/permissions.js";
 import { renderCentralOperacionesView } from "../modules/central-operaciones/central-operaciones.view.js";
 import {
   initCentralOperacionesPage,
@@ -96,8 +96,8 @@ export async function renderRoute() {
           </section>`;
         break;
       }
-      content.innerHTML = renderEstadoResultadosView();
-      initEstadoResultadosPage();
+      content.innerHTML = renderEstadoResultadosView(canUploadEerr(appState.session.user));
+      initEstadoResultadosPage(appState.session.user);
       break;
 
     default:

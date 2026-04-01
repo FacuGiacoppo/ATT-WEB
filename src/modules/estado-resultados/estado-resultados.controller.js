@@ -19,54 +19,42 @@ let percentVisible = true;
 /** Base numérica del EERR (sin filtro de rubros); se actualiza al cambiar períodos. */
 let lastEerrBase = null;
 
-const EERR_IDB_NAME = "att-web-eerr";
-const EERR_IDB_STORE = "files";
-const EERR_CACHE_KEY = "workbook";
+import { storage, db } from "../../config/firebase.js";
+import { ref as storageRef, uploadBytes, getBytes } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-storage.js";
+import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
-function openEerrIdb() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(EERR_IDB_NAME, 1);
-    req.onerror = () => reject(req.error);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(EERR_IDB_STORE)) {
-        db.createObjectStore(EERR_IDB_STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
+const EERR_STORAGE_PATH = "eerr/latest.xlsx";
+const EERR_META_DOC = "eerr/latest";
+
+async function uploadEerrToStorage(buf, uploaderName) {
+  const fileRef = storageRef(storage, EERR_STORAGE_PATH);
+  await uploadBytes(fileRef, buf);
+  const [col, docId] = EERR_META_DOC.split("/");
+  await setDoc(doc(db, col, docId), {
+    uploadedBy: uploaderName,
+    uploadedAt: serverTimestamp(),
   });
 }
 
-async function saveEerrWorkbookBytes(buf) {
-  if (!buf || !buf.byteLength) return;
+async function loadEerrFromStorage() {
   try {
-    const db = await openEerrIdb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(EERR_IDB_STORE, "readwrite");
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.objectStore(EERR_IDB_STORE).put(buf, EERR_CACHE_KEY);
-    });
-    db.close();
+    const fileRef = storageRef(storage, EERR_STORAGE_PATH);
+    const bytes = await getBytes(fileRef);
+    return bytes;
   } catch (e) {
-    console.warn("EERR: no se pudo guardar en el navegador", e);
+    if (e.code !== "storage/object-not-found") {
+      console.warn("EERR: error al descargar desde Storage", e);
+    }
+    return null;
   }
 }
 
-async function loadEerrWorkbookBytes() {
+async function loadEerrMeta() {
   try {
-    const db = await openEerrIdb();
-    const buf = await new Promise((resolve, reject) => {
-      const tx = db.transaction(EERR_IDB_STORE, "readonly");
-      tx.onerror = () => reject(tx.error);
-      const r = tx.objectStore(EERR_IDB_STORE).get(EERR_CACHE_KEY);
-      r.onsuccess = () => resolve(r.result ?? null);
-      r.onerror = () => reject(r.error);
-    });
-    db.close();
-    return buf && buf.byteLength ? buf : null;
-  } catch (e) {
-    console.warn("EERR: no se pudo leer la copia local", e);
+    const [col, docId] = EERR_META_DOC.split("/");
+    const snap = await getDoc(doc(db, col, docId));
+    return snap.exists() ? snap.data() : null;
+  } catch {
     return null;
   }
 }
@@ -89,24 +77,31 @@ function waitForXlsx(maxMs = 20000) {
   });
 }
 
-function setEerrPersistSubtitle(cached) {
+function setEerrSubtitle(meta, canUpload) {
   const el = document.getElementById("eerr-page-subtitle");
   if (!el) return;
-  el.textContent = cached
-    ? "Último Excel guardado en este navegador (se carga solo al entrar). Subí otro archivo para reemplazarlo."
-    : "Cargá el Excel y visualizá el EERR, ingresos y egresos.";
+  if (meta?.uploadedAt) {
+    const date = meta.uploadedAt.toDate ? meta.uploadedAt.toDate() : new Date(meta.uploadedAt.seconds * 1000);
+    const fmt = date.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    el.textContent = `Última actualización: ${fmt} por ${meta.uploadedBy ?? "—"}.${canUpload ? " Subí un nuevo archivo para reemplazarlo." : ""}`;
+  } else {
+    el.textContent = canUpload
+      ? "No hay datos cargados aún. Subí el Excel para empezar."
+      : "No hay datos disponibles todavía.";
+  }
 }
 
-export function initEstadoResultadosPage() {
+export function initEstadoResultadosPage(user) {
+  const canUpload = user?.role === "superadmin";
+
   wireTabs();
-  wireXlsxInput();
+  if (canUpload) wireXlsxInput(user);
   wireListControls();
   wireEerrControls();
   wirePeriodFilterControls();
   wireRubroFilterControls();
   renderPeriodFilterChips([]);
 
-  // Start with an empty EERR until the user loads an Excel or we restore from IndexedDB.
   renderEerr({ months: [], sections: [] });
   renderListHead("INGRESOS");
   renderListHead("EGRESOS");
@@ -114,16 +109,18 @@ export function initEstadoResultadosPage() {
   renderListBody("EGRESOS", []);
 
   void (async () => {
-    const xlsxReady = await waitForXlsx();
-    if (!xlsxReady) return;
-    const bytes = await loadEerrWorkbookBytes();
-    if (!bytes) return;
+    const [xlsxReady, meta, bytes] = await Promise.all([
+      waitForXlsx(),
+      loadEerrMeta(),
+      loadEerrFromStorage(),
+    ]);
+    setEerrSubtitle(meta, canUpload);
+    if (!xlsxReady || !bytes) return;
     try {
       const wb = window.XLSX.read(bytes, { type: "array", cellDates: true });
       loadFromWorkbook(wb);
-      setEerrPersistSubtitle(true);
     } catch (e) {
-      console.warn("EERR: copia local inválida o corrupta", e);
+      console.warn("EERR: archivo en Storage inválido o corrupto", e);
     }
   })();
 }
@@ -140,7 +137,7 @@ function switchTab(tabId) {
   document.querySelectorAll(".eerr-panel").forEach((p) => p.classList.toggle("is-active", p.dataset.eerrPanel === tabId));
 }
 
-function wireXlsxInput() {
+function wireXlsxInput(user) {
   const input = document.getElementById("eerr-xlsx-input");
   if (!input) return;
   input.addEventListener("change", async (ev) => {
@@ -151,18 +148,23 @@ function wireXlsxInput() {
       return;
     }
     const buf = await file.arrayBuffer();
-    const copyForStore = buf.slice(0);
     let wb;
     try {
-      wb = window.XLSX.read(buf, { type: "array", cellDates: true });
+      wb = window.XLSX.read(buf.slice(0), { type: "array", cellDates: true });
     } catch (err) {
       console.error(err);
       alert("No se pudo leer el archivo. Verificá que sea un Excel válido.");
       return;
     }
     loadFromWorkbook(wb);
-    await saveEerrWorkbookBytes(copyForStore);
-    setEerrPersistSubtitle(true);
+    try {
+      await uploadEerrToStorage(buf, user?.name ?? user?.email ?? "superadmin");
+      const meta = await loadEerrMeta();
+      setEerrSubtitle(meta, true);
+    } catch (e) {
+      console.error("EERR: error al subir a Storage", e);
+      alert("El Excel se visualizó correctamente pero no se pudo guardar en la nube. Revisá los permisos de Storage.");
+    }
   });
 }
 
