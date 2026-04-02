@@ -78,10 +78,19 @@
   margin-bottom: 18px;
 }
 
+.op-toolbar-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .op-filters-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  flex: 1;
 }
 
 .op-select {
@@ -833,4 +842,89 @@
   background: rgba(26, 26, 46, 0.04) !important;
   cursor: default !important;
   color: var(--ink-light);
+}
+
+/* ── Vista fecha bar ──────────────────────────────────────── */
+.op-vista-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.op-vista-lbl {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-right: 2px;
+}
+
+.op-vista-tabs {
+  display: inline-flex;
+  background: rgba(26, 26, 46, 0.07);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.op-vista-tab {
+  padding: 5px 13px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-light);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.op-vista-tab.is-active {
+  background: white;
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(26, 26, 46, 0.14);
+}
+
+.op-vista-tab:not(.is-active):hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.op-vista-nav {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(26, 26, 46, 0.14);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  line-height: 1;
+  padding: 0;
+  box-shadow: 0 1px 2px rgba(26, 26, 46, 0.06);
+}
+
+.op-vista-nav:hover:not(:disabled) {
+  border-color: rgba(26, 26, 46, 0.28);
+}
+
+.op-vista-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+  box-shadow: none;
+}
+
+.op-vista-period {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 150px;
+  text-align: center;
+  white-space: nowrap;
 }

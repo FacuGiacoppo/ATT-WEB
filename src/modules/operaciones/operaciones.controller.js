@@ -13,7 +13,8 @@ import {
   filterAndSortOperaciones,
   computeOperacionKpis,
   renderOperacionRow,
-  paintOperacionesFilters
+  paintOperacionesFilters,
+  updateVistaBarDisplay
 } from "./operaciones.view.js";
 import { saveCumplimiento } from "./cumplimentar.service.js";
 import {
@@ -487,6 +488,36 @@ export function bindOperacionesEvents() {
         panel.classList.add("is-visible");
         filterToggle.classList.add("is-open");
       }
+      return;
+    }
+
+    // Vista fecha tab
+    const vistaTab = event.target.closest("[data-vista]");
+    if (vistaTab && document.getElementById("op-vista-bar")) {
+      const mode = vistaTab.dataset.vista;
+      setState("operaciones.vistaMode", mode);
+      if (mode !== "todos" && !appState.operaciones.vistaRefDate) {
+        const t = new Date();
+        setState("operaciones.vistaRefDate", t.toISOString().slice(0, 10));
+      }
+      updateVistaBarDisplay();
+      paintOperacionesTable();
+      return;
+    }
+
+    // Vista fecha nav arrow
+    const vistaNav = event.target.closest("[data-vista-nav]");
+    if (vistaNav && document.getElementById("op-vista-bar")) {
+      const dir = Number(vistaNav.dataset.vistaNav);
+      const { vistaMode, vistaRefDate } = appState.operaciones;
+      if (vistaMode === "todos") return;
+      const ref = vistaRefDate ? new Date(vistaRefDate + "T00:00:00") : new Date();
+      if (vistaMode === "dia") ref.setDate(ref.getDate() + dir);
+      else if (vistaMode === "semana") ref.setDate(ref.getDate() + dir * 7);
+      else if (vistaMode === "mes") ref.setMonth(ref.getMonth() + dir);
+      setState("operaciones.vistaRefDate", ref.toISOString().slice(0, 10));
+      updateVistaBarDisplay();
+      paintOperacionesTable();
       return;
     }
 

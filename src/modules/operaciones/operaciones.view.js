@@ -22,6 +22,94 @@ import {
 
 const ESTADOS = ["Pendiente", "Cumplido", "Cumplido Tardio", "Vencido"];
 const ORGANISMOS = ["ARCA", "AFIP", "Provincial", "Municipal", "Otro"];
+const MESES_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+const MESES_FULL = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const DIAS_FULL = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+
+function weekRange(ref) {
+  const d = new Date(ref);
+  d.setHours(0, 0, 0, 0);
+  const start = new Date(d);
+  start.setDate(d.getDate() - d.getDay()); // back to Sunday
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6); // forward to Saturday
+  return { start, end };
+}
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+function vistaPeriodLabel(mode, refDate) {
+  if (mode === "todos") return "Todos los registros";
+  const ref = refDate ? new Date(refDate + "T00:00:00") : new Date();
+  if (mode === "dia") {
+    return `${capitalize(DIAS_FULL[ref.getDay()])}, ${ref.getDate()} ${MESES_ES[ref.getMonth()]} ${ref.getFullYear()}`;
+  }
+  if (mode === "mes") {
+    return `${capitalize(MESES_FULL[ref.getMonth()])} ${ref.getFullYear()}`;
+  }
+  if (mode === "semana") {
+    const { start, end } = weekRange(ref);
+    const startLabel = `${start.getDate()} ${MESES_ES[start.getMonth()]}`;
+    const endLabel = `${end.getDate()} ${MESES_ES[end.getMonth()]} ${end.getFullYear()}`;
+    return `${startLabel} – ${endLabel}`;
+  }
+  return "";
+}
+
+function isInVistaRange(vencimiento, mode, ref) {
+  if (!vencimiento) return false;
+  const d = parseISODate(vencimiento);
+  if (!d) return false;
+  if (mode === "dia") {
+    return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
+  }
+  if (mode === "mes") {
+    return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+  }
+  if (mode === "semana") {
+    const { start, end } = weekRange(ref);
+    return d >= start && d <= end;
+  }
+  return true;
+}
+
+export function renderVistaFechaBar() {
+  const { vistaMode, vistaRefDate } = appState.operaciones;
+  const label = vistaPeriodLabel(vistaMode, vistaRefDate);
+  const navDisabled = vistaMode === "todos" ? " disabled" : "";
+  const tabs = [
+    ["todos", "Todos"],
+    ["mes", "Mes"],
+    ["semana", "Semana"],
+    ["dia", "Día"]
+  ];
+  return `
+    <div class="op-vista-bar" id="op-vista-bar">
+      <span class="op-vista-lbl">VISTA</span>
+      <div class="op-vista-tabs">
+        ${tabs.map(([v, l]) => `<button type="button" class="op-vista-tab${vistaMode === v ? " is-active" : ""}" data-vista="${v}">${l}</button>`).join("")}
+      </div>
+      <button type="button" class="op-vista-nav" data-vista-nav="-1"${navDisabled}>‹</button>
+      <span class="op-vista-period" id="op-vista-period">${escapeHtml(label)}</span>
+      <button type="button" class="op-vista-nav" data-vista-nav="1"${navDisabled}>›</button>
+    </div>
+  `;
+}
+
+export function updateVistaBarDisplay() {
+  const { vistaMode, vistaRefDate } = appState.operaciones;
+  const label = vistaPeriodLabel(vistaMode, vistaRefDate);
+  const navDisabled = vistaMode === "todos";
+  document.querySelectorAll("[data-vista]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.vista === vistaMode);
+  });
+  const periodEl = document.getElementById("op-vista-period");
+  if (periodEl) periodEl.textContent = label;
+  document.querySelectorAll("[data-vista-nav]").forEach((btn) => { btn.disabled = navDisabled; });
+}
 
 const DIAS_SEMANA_OPTS = [
   [1, "Lunes"],
@@ -108,12 +196,15 @@ export function renderOperacionesView() {
       <div id="op-kpis" class="op-kpis"></div>
 
       <div class="op-toolbar">
-        <div class="op-filters-row" id="op-filters-row">
-          ${renderMultiFilter("op-filter-cliente", "Cliente")}
-          ${renderMultiFilter("op-filter-obligacion", "Obligación / Tarea")}
-          ${renderMultiFilter("op-filter-mes-vto", "Mes Vto.")}
-          ${renderMultiFilter("op-filter-estado", "Estado")}
-          ${renderMultiFilter("op-filter-usuario", "Usuario")}
+        <div class="op-toolbar-top">
+          <div class="op-filters-row" id="op-filters-row">
+            ${renderMultiFilter("op-filter-cliente", "Cliente")}
+            ${renderMultiFilter("op-filter-obligacion", "Obligación / Tarea")}
+            ${renderMultiFilter("op-filter-mes-vto", "Mes Vto.")}
+            ${renderMultiFilter("op-filter-estado", "Estado")}
+            ${renderMultiFilter("op-filter-usuario", "Usuario")}
+          </div>
+          ${renderVistaFechaBar()}
         </div>
         <input
           id="op-search"
@@ -581,8 +672,6 @@ export function computeOperacionKpis(items) {
   return { pendientes, prox7, vencidas, cerradas, total: items.length };
 }
 
-const MESES_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-
 function buildMultiFilterOpts(id, values, selected, labelFn) {
   const optsEl = document.getElementById(`${id}-opts`);
   const countEl = document.getElementById(`${id}-count`);
@@ -621,8 +710,13 @@ export function paintOperacionesFilters(items) {
 
 export function filterAndSortOperaciones(items, state) {
   const q = (state.search ?? "").trim().toLowerCase();
+  const vistaMode = state.vistaMode ?? "todos";
+  const vistaRef = (vistaMode !== "todos")
+    ? (state.vistaRefDate ? new Date(state.vistaRefDate + "T00:00:00") : (() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; })())
+    : null;
 
   let rows = items.filter((r) => {
+    if (vistaRef && !isInVistaRange(r.vencimiento, vistaMode, vistaRef)) return false;
     if (state.estadoFilter?.length > 0 && !state.estadoFilter.includes(r.estado)) return false;
     if (state.clienteFilter?.length > 0 && !state.clienteFilter.includes(r.clienteNombre)) return false;
     if (state.obligacionFilter?.length > 0 && !state.obligacionFilter.includes(r.obligacion)) return false;

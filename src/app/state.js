@@ -41,7 +41,9 @@ export const appState = {
     usuarioFilter: [],
     sortKey: "vencimiento",
     sortDir: "asc",
-    cumplimentarContactos: []
+    cumplimentarContactos: [],
+    vistaMode: "todos",
+    vistaRefDate: null
   },
   /** Filtros de la Central de operaciones (solo superadmin). */
   centralOperaciones: {
