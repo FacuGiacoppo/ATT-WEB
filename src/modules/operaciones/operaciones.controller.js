@@ -59,7 +59,7 @@ function buildMailtoUrl({ to, subject, body }) {
   const params = new URLSearchParams();
   if (subject) params.set("subject", subject);
   if (body) params.set("body", body);
-  return `mailto:${encodeURIComponent(toStr)}?${params.toString()}`;
+  return `mailto:${encodeURIComponent(toStr)}?${params.toString().replaceAll("+", "%20")}`;
 }
 
 function buildMsOutlookUrl({ to, subject, body }) {
