@@ -202,13 +202,11 @@ function renderCumplimentarModal(item) {
   const opts = contactos
     .filter((c) => c && c.activo !== false)
     .map((c) => {
-      const label = [c.nombre, c.cargo].filter(Boolean).join(" · ");
-      const email = c.email ? ` (${c.email})` : "";
       const checked = c.principal ? " checked" : "";
       const disabled = c.email ? "" : " disabled";
       return `<label class="op-cump-contact">
         <input type="checkbox" name="op-cump-dest" value="${escapeHtml(c.id)}"${checked}${disabled} />
-        <span class="op-cump-contact-label">${escapeHtml(label || "Sin nombre")}${escapeHtml(email)}</span>
+        <span class="op-cump-contact-label">${escapeHtml(c.nombre || "Sin nombre")}</span>
       </label>`;
     })
     .join("");

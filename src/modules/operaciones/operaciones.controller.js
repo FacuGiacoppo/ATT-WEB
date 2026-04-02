@@ -77,23 +77,10 @@ function buildMsOutlookUrl({ to, subject, body }) {
  * para no sacarte de la app antes de guardar en Firestore.
  */
 function openOutlookCompose({ to, subject, body }) {
-  const msOutlook = buildMsOutlookUrl({ to, subject, body });
   const mailto = buildMailtoUrl({ to, subject, body });
-  let w = null;
-  try {
-    w = window.open(msOutlook, "_blank", "noopener,noreferrer");
-  } catch {
-    w = null;
-  }
-  if (!w || w.closed) {
-    try {
-      if (!window.open(mailto, "_blank", "noopener,noreferrer")) {
-        window.location.href = mailto;
-      }
-    } catch {
-      window.location.href = mailto;
-    }
-  }
+  const a = document.createElement("a");
+  a.href = mailto;
+  a.click();
 }
 
 function syncTareaProgramacionPanels() {
