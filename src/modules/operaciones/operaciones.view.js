@@ -256,8 +256,11 @@ function renderCumplimentarModal(item) {
           </label>
 
           <p class="op-field-hint">
-            Al confirmar, se enviará el correo desde tu cuenta Outlook (Microsoft) directamente desde la web.
+            Podés usar «Abrir Outlook / correo» para armar el mensaje antes de confirmar. Al confirmar, se guarda el cumplimiento y se vuelve a abrir el correo con los mismos datos para que adjuntes y envíes.
           </p>
+          <div class="op-cump-mail-actions">
+            <button type="button" class="btn-secondary" data-action="open-outlook-compose">Abrir Outlook / correo</button>
+          </div>
         </div>
       </form>
     `,

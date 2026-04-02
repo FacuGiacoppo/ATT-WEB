@@ -19,7 +19,6 @@ import {
   renderOperacionRow
 } from "./operaciones.view.js";
 import { saveCumplimiento } from "./cumplimentar.service.js";
-import { sendMailGraph } from "../email/outlook-graph.service.js";
 import {
   sugerirVencimientoIvaReferencia,
   ultimoDigitoCuit
@@ -71,6 +70,30 @@ function buildMsOutlookUrl({ to, subject, body }) {
   if (body) params.set("body", body);
   // Intenta abrir Outlook app (si está instalado y el esquema está habilitado)
   return `ms-outlook://compose?${params.toString()}`;
+}
+
+/**
+ * Intenta abrir Outlook (`ms-outlook://`); si el navegador bloquea o no aplica, usa `mailto:` en nueva pestaña
+ * para no sacarte de la app antes de guardar en Firestore.
+ */
+function openOutlookCompose({ to, subject, body }) {
+  const msOutlook = buildMsOutlookUrl({ to, subject, body });
+  const mailto = buildMailtoUrl({ to, subject, body });
+  let w = null;
+  try {
+    w = window.open(msOutlook, "_blank", "noopener,noreferrer");
+  } catch {
+    w = null;
+  }
+  if (!w || w.closed) {
+    try {
+      if (!window.open(mailto, "_blank", "noopener,noreferrer")) {
+        window.location.href = mailto;
+      }
+    } catch {
+      window.location.href = mailto;
+    }
+  }
 }
 
 function syncTareaProgramacionPanels() {
@@ -411,6 +434,29 @@ export function bindOperacionesEvents() {
       return;
     }
 
+    const openOutlookBtn = event.target.closest("[data-action='open-outlook-compose']");
+    if (openOutlookBtn) {
+      const requiereEnvio = Boolean(document.getElementById("op-cump-enviar")?.checked);
+      if (!requiereEnvio) {
+        alert("Primero activá «Registrar envío al cliente» y seleccioná destinatarios.");
+        return;
+      }
+      const contactos = appState.operaciones.cumplimentarContactos ?? [];
+      const selectedIds = [...document.querySelectorAll('input[name="op-cump-dest"]:checked')].map((el) => el.value);
+      const emails = contactos
+        .filter((c) => selectedIds.includes(c.id))
+        .map((c) => c.email ?? "")
+        .filter(Boolean);
+      if (!emails.length) {
+        alert("Seleccioná al menos un destinatario con email.");
+        return;
+      }
+      const asunto = document.getElementById("op-cump-asunto")?.value?.trim() ?? "";
+      const cuerpo = document.getElementById("op-cump-cuerpo")?.value ?? "";
+      openOutlookCompose({ to: emails, subject: asunto, body: cuerpo });
+      return;
+    }
+
     const sortBtn = event.target.closest("[data-op-sort]");
     if (sortBtn && document.getElementById("op-tbody")) {
       const key = sortBtn.dataset.opSort;
@@ -538,30 +584,6 @@ async function confirmCumplimentar() {
   const asunto = requiereEnvio ? (document.getElementById("op-cump-asunto")?.value?.trim() ?? "") : "";
   const cuerpo = requiereEnvio ? (document.getElementById("op-cump-cuerpo")?.value ?? "") : "";
 
-  // Envío real desde la web (Microsoft Graph) antes de registrar cumplimiento
-  if (requiereEnvio) {
-    try {
-      await sendMailGraph({
-        to: destinatarios.map((d) => d.email),
-        subject: asunto,
-        bodyText: cuerpo
-      });
-    } catch (e) {
-      console.error("sendMailGraph:", e);
-      // fallback manual por si el usuario prefiere enviar fuera del sistema
-      const mailto = buildMailtoUrl({
-        to: destinatarios.map((d) => d.email),
-        subject: asunto,
-        body: cuerpo
-      });
-      alert(
-        `No se pudo enviar el correo desde la web.\n\nDetalle: ${e?.message ?? String(e)}\n\nSe abrirá una alternativa manual (mailto).`
-      );
-      window.location.href = mailto;
-      return;
-    }
-  }
-
   const venc = String(item.vencimiento || "").slice(0, 10);
   const nuevoEstado = venc && fechaCumplimiento > venc ? "Cumplido Tardio" : "Cumplido";
 
@@ -587,6 +609,14 @@ async function confirmCumplimentar() {
     );
     await loadOperaciones();
     await closeModal();
+    // Después de guardar: abrir Outlook / mailto (adjuntos en el cliente de correo)
+    if (requiereEnvio) {
+      openOutlookCompose({
+        to: destinatarios.map((d) => d.email),
+        subject: asunto,
+        body: cuerpo
+      });
+    }
   } catch (e) {
     console.error(e);
     alert("No se pudo registrar el cumplimiento.");

@@ -7,7 +7,7 @@ para que el browser siempre cargue la versión más nueva.
 import http.server
 import os
 
-PORT = 3000
+PORT = int(os.environ.get("PORT", 3000))
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
