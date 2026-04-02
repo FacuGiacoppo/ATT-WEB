@@ -1,9 +1,9 @@
 import { appState, setState } from "../../app/state.js";
+import { refreshRoute } from "../../app/route-refresh.js";
 
 function setOperacionesLoadError(message) {
   setState("operaciones.loadError", message);
 }
-import { refreshRoute } from "../../app/route-refresh.js";
 import {
   fetchOperaciones,
   createOperacion,

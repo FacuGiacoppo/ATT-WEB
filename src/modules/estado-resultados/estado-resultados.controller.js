@@ -1,3 +1,6 @@
+import { db } from "../../config/firebase.js";
+import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
 const LIST_COLS = {
   INGRESOS: ["FECHA", "CUIT", "CLIENTE", "RUBRO", "SUB-RUBRO", "IMPUTACIÓN", "COMPROBANTE", "NETO", "IVA", "TOTAL"],
   EGRESOS: ["FECHA", "CONCEPTO", "RUBRO", "SUB-RUBRO", "IMPUTACIÓN", "NETO", "IVA", "TOTAL"],
@@ -18,9 +21,6 @@ const expanded = {};
 let percentVisible = true;
 /** Base numérica del EERR (sin filtro de rubros); se actualiza al cambiar períodos. */
 let lastEerrBase = null;
-
-import { db } from "../../config/firebase.js";
-import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T/;
 
