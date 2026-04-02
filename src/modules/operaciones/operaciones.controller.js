@@ -1,9 +1,5 @@
 import { appState, setState } from "../../app/state.js";
 import { refreshRoute } from "../../app/route-refresh.js";
-
-function setOperacionesLoadError(message) {
-  setState("operaciones.loadError", message);
-}
 import {
   fetchOperaciones,
   createOperacion,
@@ -36,6 +32,33 @@ import {
   validarPeriodoObligacionVsCalendario,
   validarTareaPeriodoYVencimiento
 } from "../../data/calendario-fiscal-limits.js";
+
+function setOperacionesLoadError(message) {
+  setState("operaciones.loadError", message);
+}
+
+const FILTER_ID_TO_STATE_KEY = {
+  "op-filter-estado": "estadoFilter",
+  "op-filter-cliente": "clienteFilter",
+  "op-filter-obligacion": "obligacionFilter",
+  "op-filter-mes-vto": "mesVtoFilter",
+  "op-filter-usuario": "usuarioFilter"
+};
+
+function closeAllFilterPanels() {
+  document.querySelectorAll(".op-mfilter-panel").forEach((p) => { p.hidden = true; });
+  document.querySelectorAll("[data-filter-toggle]").forEach((b) => b.classList.remove("is-open"));
+}
+
+function updateFilterBadge(filterId, selected) {
+  const countEl = document.getElementById(`${filterId}-count`);
+  const btn = document.querySelector(`[data-filter-toggle="${filterId}"]`);
+  if (countEl) {
+    countEl.hidden = selected.length === 0;
+    countEl.textContent = selected.length > 0 ? String(selected.length) : "";
+  }
+  if (btn) btn.classList.toggle("is-active", selected.length > 0);
+}
 
 let opEventsBound = false;
 
@@ -446,6 +469,26 @@ export function bindOperacionesEvents() {
       return;
     }
 
+    // Close filter panels when clicking outside
+    if (!event.target.closest(".op-mfilter")) {
+      closeAllFilterPanels();
+    }
+
+    // Toggle multi-select filter panel
+    const filterToggle = event.target.closest("[data-filter-toggle]");
+    if (filterToggle) {
+      const id = filterToggle.dataset.filterToggle;
+      const panel = document.getElementById(`${id}-panel`);
+      if (!panel) return;
+      const isOpen = !panel.hidden;
+      closeAllFilterPanels();
+      if (!isOpen) {
+        panel.hidden = false;
+        filterToggle.classList.add("is-open");
+      }
+      return;
+    }
+
     const sortBtn = event.target.closest("[data-op-sort]");
     if (sortBtn && document.getElementById("op-tbody")) {
       const key = sortBtn.dataset.opSort;
@@ -497,26 +540,22 @@ export function bindOperacionesEvents() {
 
   document.addEventListener("change", (event) => {
     if (event.target.id === "op-organismo") toggleArcaPanel();
-    if (event.target.id === "op-filter-estado") {
-      setState("operaciones.estadoFilter", event.target.value);
-      paintOperacionesTable();
+
+    // Multi-select filter checkboxes
+    const checkbox = event.target.closest(".op-mfilter-panel input[type='checkbox']");
+    if (checkbox) {
+      const panel = checkbox.closest(".op-mfilter-panel");
+      const filterId = panel?.id?.replace("-panel", "");
+      const stateKey = filterId ? FILTER_ID_TO_STATE_KEY[filterId] : null;
+      if (stateKey) {
+        const selected = [...document.querySelectorAll(`input[name="${filterId}"]:checked`)].map((el) => el.value);
+        setState(`operaciones.${stateKey}`, selected);
+        updateFilterBadge(filterId, selected);
+        paintOperacionesTable();
+      }
+      return;
     }
-    if (event.target.id === "op-filter-cliente") {
-      setState("operaciones.clienteFilter", event.target.value);
-      paintOperacionesTable();
-    }
-    if (event.target.id === "op-filter-obligacion") {
-      setState("operaciones.obligacionFilter", event.target.value);
-      paintOperacionesTable();
-    }
-    if (event.target.id === "op-filter-mes-vto") {
-      setState("operaciones.mesVtoFilter", event.target.value);
-      paintOperacionesTable();
-    }
-    if (event.target.id === "op-filter-usuario") {
-      setState("operaciones.usuarioFilter", event.target.value);
-      paintOperacionesTable();
-    }
+
     if (event.target.id === "op-periodo" || event.target.id === "op-cliente-id") {
       if (document.getElementById("op-tipo")?.value !== "tarea") autoCalcVencimiento();
     }
@@ -556,6 +595,13 @@ async function confirmCumplimentar() {
   const fechaCumplimiento = document.getElementById("op-cump-fecha")?.value ?? "";
   if (!fechaCumplimiento) {
     alert("Ingresá la fecha de cumplimiento.");
+    return;
+  }
+
+  const tiempoStr = document.getElementById("op-cump-tiempo")?.value?.trim() ?? "";
+  const tiempoInsumidoMin = parseInt(tiempoStr, 10);
+  if (!tiempoStr || isNaN(tiempoInsumidoMin) || tiempoInsumidoMin < 1) {
+    alert("Ingresá el tiempo insumido en minutos (mínimo 1 minuto).");
     return;
   }
 
@@ -599,6 +645,7 @@ async function confirmCumplimentar() {
         obligacion: item.obligacion ?? "",
         periodo: item.periodo ?? "",
         fechaCumplimiento,
+        tiempoInsumidoMin,
         comentarioInterno,
         requiereEnvio,
         destinatarios,

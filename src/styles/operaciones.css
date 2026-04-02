@@ -717,3 +717,111 @@
   line-height: 1.5;
   color: var(--ink-light);
 }
+
+/* ── Multi-select filter dropdown ─────────────────────────── */
+.op-mfilter {
+  position: relative;
+}
+
+.op-mfilter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(26, 26, 46, 0.12);
+  background: white;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s;
+}
+
+.op-mfilter-btn:hover {
+  border-color: rgba(26, 26, 46, 0.28);
+}
+
+.op-mfilter-btn.is-active {
+  border-color: var(--accent, #c94a3a);
+  background: rgba(201, 74, 58, 0.07);
+  color: var(--accent, #c94a3a);
+}
+
+.op-mfilter-btn.is-open {
+  border-color: rgba(26, 26, 46, 0.28);
+  box-shadow: 0 0 0 3px rgba(26, 26, 46, 0.06);
+}
+
+.op-mfilter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent, #c94a3a);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.op-mfilter-arrow {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.op-mfilter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  min-width: 210px;
+  max-width: 320px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid rgba(26, 26, 46, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(26, 26, 46, 0.14);
+  padding: 8px;
+}
+
+.op-mfilter-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.op-mfilter-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink, #1a1a2e);
+  user-select: none;
+}
+
+.op-mfilter-opt:hover {
+  background: rgba(26, 26, 46, 0.05);
+}
+
+.op-mfilter-opt input[type="checkbox"] {
+  accent-color: var(--accent, #c94a3a);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* Readonly date in cumplimentar modal */
+.op-cump-fecha-ro {
+  background: rgba(26, 26, 46, 0.04) !important;
+  cursor: default !important;
+  color: var(--ink-light);
+}

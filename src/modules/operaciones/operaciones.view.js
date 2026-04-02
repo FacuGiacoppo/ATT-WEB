@@ -61,6 +61,21 @@ function isTareaLabel(obligacion) {
   return esNombreTareaPlanIn(obligacion);
 }
 
+function renderMultiFilter(id, label) {
+  return `
+    <div class="op-mfilter" data-filter-id="${id}">
+      <button type="button" class="op-mfilter-btn" data-filter-toggle="${id}">
+        <span class="op-mfilter-label">${escapeHtml(label)}</span>
+        <span class="op-mfilter-count" id="${id}-count" hidden></span>
+        <span class="op-mfilter-arrow">▾</span>
+      </button>
+      <div class="op-mfilter-panel" id="${id}-panel" hidden>
+        <div class="op-mfilter-opts" id="${id}-opts"></div>
+      </div>
+    </div>
+  `;
+}
+
 export function renderOperacionesView() {
   const user = appState.session.user;
 
@@ -75,16 +90,7 @@ export function renderOperacionesView() {
             <strong>ARCA</strong> (enlaces oficiales y sugerencia de día según CUIT).
           </p>
         </div>
-        <div class="op-hero-right">
-          ${
-            canCreateOperacion(user)
-              ? `<div class="op-new-btns">
-                  <button type="button" id="btn-new-op" class="btn-primary">+ Obligación</button>
-                  <button type="button" id="btn-new-tarea" class="btn-secondary">+ Tarea</button>
-                </div>`
-              : ""
-          }
-        </div>
+        <div class="op-hero-right"></div>
       </div>
 
       <div id="op-load-error" class="op-load-error" hidden role="alert"></div>
@@ -99,27 +105,15 @@ export function renderOperacionesView() {
         </div>
       </div>
 
+      <div id="op-kpis" class="op-kpis"></div>
+
       <div class="op-toolbar">
-        <div class="op-filters-row">
-          <select id="op-filter-cliente" class="op-select" aria-label="Filtrar por cliente">
-            <option value="">Cliente</option>
-          </select>
-          <select id="op-filter-obligacion" class="op-select" aria-label="Filtrar por obligación">
-            <option value="">Obligación / Tarea</option>
-          </select>
-          <select id="op-filter-mes-vto" class="op-select" aria-label="Filtrar por mes de vencimiento">
-            <option value="">Mes Vto.</option>
-          </select>
-          <select id="op-filter-estado" class="op-select" aria-label="Filtrar por estado">
-            <option value="todos" ${appState.operaciones.estadoFilter === "todos" ? "selected" : ""}>Estado</option>
-            ${ESTADOS.map(
-              (e) =>
-                `<option value="${escapeHtml(e)}" ${appState.operaciones.estadoFilter === e ? "selected" : ""}>${escapeHtml(e)}</option>`
-            ).join("")}
-          </select>
-          <select id="op-filter-usuario" class="op-select" aria-label="Filtrar por usuario">
-            <option value="">Usuario</option>
-          </select>
+        <div class="op-filters-row" id="op-filters-row">
+          ${renderMultiFilter("op-filter-cliente", "Cliente")}
+          ${renderMultiFilter("op-filter-obligacion", "Obligación / Tarea")}
+          ${renderMultiFilter("op-filter-mes-vto", "Mes Vto.")}
+          ${renderMultiFilter("op-filter-estado", "Estado")}
+          ${renderMultiFilter("op-filter-usuario", "Usuario")}
         </div>
         <input
           id="op-search"
@@ -129,8 +123,6 @@ export function renderOperacionesView() {
           value="${escapeHtml(appState.operaciones.search ?? "")}"
         />
       </div>
-
-      <div id="op-kpis" class="op-kpis"></div>
 
       <div class="op-table-card">
         <table class="op-table">
@@ -228,14 +220,18 @@ function renderCumplimentarModal(item) {
 
         <div class="op-field-row">
           <label class="op-field">
-            <span>Fecha de cumplimiento *</span>
-            <input id="op-cump-fecha" type="date" required value="${escapeHtml(item?.fechaCumplimiento ?? todayIso)}" />
+            <span>Fecha de cumplimiento</span>
+            <input id="op-cump-fecha" type="date" readonly value="${todayIso}" class="op-cump-fecha-ro" />
           </label>
           <label class="op-field">
-            <span>Comentario interno</span>
-            <input id="op-cump-coment" type="text" value="${escapeHtml(item?.comentarioInterno ?? "")}" placeholder="Opcional (solo interno)" />
+            <span>Tiempo insumido (minutos) *</span>
+            <input id="op-cump-tiempo" type="number" min="1" step="1" placeholder="Ej: 30" />
           </label>
         </div>
+        <label class="op-field">
+          <span>Comentario interno</span>
+          <input id="op-cump-coment" type="text" value="${escapeHtml(item?.comentarioInterno ?? "")}" placeholder="Opcional (solo interno)" />
+        </label>
 
         <label class="op-cump-check">
           <input type="checkbox" id="op-cump-enviar" />
@@ -585,50 +581,52 @@ export function computeOperacionKpis(items) {
   return { pendientes, prox7, vencidas, cerradas, total: items.length };
 }
 
+const MESES_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+function buildMultiFilterOpts(id, values, selected, labelFn) {
+  const optsEl = document.getElementById(`${id}-opts`);
+  const countEl = document.getElementById(`${id}-count`);
+  if (!optsEl) return;
+  optsEl.innerHTML = values.map((v) => {
+    const lbl = labelFn ? labelFn(v) : v;
+    const checked = selected.includes(v) ? " checked" : "";
+    return `<label class="op-mfilter-opt">
+      <input type="checkbox" name="${id}" value="${escapeHtml(v)}"${checked} />
+      <span>${escapeHtml(lbl)}</span>
+    </label>`;
+  }).join("");
+  if (countEl) {
+    countEl.hidden = selected.length === 0;
+    countEl.textContent = selected.length > 0 ? String(selected.length) : "";
+  }
+}
+
 export function paintOperacionesFilters(items) {
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "es"));
-
-  const clientes = uniq(items.map((r) => r.clienteNombre));
-  const obligaciones = uniq(items.map((r) => r.obligacion));
-  const meses = uniq(items.map((r) => r.vencimiento?.slice(0, 7)).filter(Boolean)).sort();
-  const usuarios = uniq(items.map((r) => r.responsable));
-
   const st = appState.operaciones;
 
-  const fill = (id, opts, current, allLabel) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = `<option value="">${allLabel}</option>` +
-      opts.map((v) => `<option value="${escapeHtml(v)}"${v === current ? " selected" : ""}>${escapeHtml(v)}</option>`).join("");
-  };
+  buildMultiFilterOpts("op-filter-cliente", uniq(items.map((r) => r.clienteNombre)), st.clienteFilter ?? []);
+  buildMultiFilterOpts("op-filter-obligacion", uniq(items.map((r) => r.obligacion)), st.obligacionFilter ?? []);
 
-  fill("op-filter-cliente", clientes, st.clienteFilter, "Cliente");
-  fill("op-filter-obligacion", obligaciones, st.obligacionFilter, "Obligación / Tarea");
+  const meses = uniq(items.map((r) => r.vencimiento?.slice(0, 7)).filter(Boolean)).sort();
+  buildMultiFilterOpts("op-filter-mes-vto", meses, st.mesVtoFilter ?? [], (ym) => {
+    const [y, m] = ym.split("-");
+    return `${MESES_ES[Number(m) - 1]}-${y}`;
+  });
 
-  const mesEl = document.getElementById("op-filter-mes-vto");
-  if (mesEl) {
-    const MESES_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-    mesEl.innerHTML = `<option value="">Mes Vto.</option>` +
-      meses.map((ym) => {
-        const [y, m] = ym.split("-");
-        const lbl = `${MESES_ES[Number(m) - 1]}-${y}`;
-        return `<option value="${escapeHtml(ym)}"${ym === st.mesVtoFilter ? " selected" : ""}>${escapeHtml(lbl)}</option>`;
-      }).join("");
-  }
-
-  fill("op-filter-usuario", usuarios, st.usuarioFilter, "Usuario");
+  buildMultiFilterOpts("op-filter-estado", ESTADOS, st.estadoFilter ?? []);
+  buildMultiFilterOpts("op-filter-usuario", uniq(items.map((r) => r.responsable)), st.usuarioFilter ?? []);
 }
 
 export function filterAndSortOperaciones(items, state) {
   const q = (state.search ?? "").trim().toLowerCase();
-  const ef = state.estadoFilter ?? "todos";
 
   let rows = items.filter((r) => {
-    if (ef !== "todos" && r.estado !== ef) return false;
-    if (state.clienteFilter && r.clienteNombre !== state.clienteFilter) return false;
-    if (state.obligacionFilter && r.obligacion !== state.obligacionFilter) return false;
-    if (state.mesVtoFilter && !(r.vencimiento ?? "").startsWith(state.mesVtoFilter)) return false;
-    if (state.usuarioFilter && r.responsable !== state.usuarioFilter) return false;
+    if (state.estadoFilter?.length > 0 && !state.estadoFilter.includes(r.estado)) return false;
+    if (state.clienteFilter?.length > 0 && !state.clienteFilter.includes(r.clienteNombre)) return false;
+    if (state.obligacionFilter?.length > 0 && !state.obligacionFilter.includes(r.obligacion)) return false;
+    if (state.mesVtoFilter?.length > 0 && !state.mesVtoFilter.some((m) => (r.vencimiento ?? "").startsWith(m))) return false;
+    if (state.usuarioFilter?.length > 0 && !state.usuarioFilter.includes(r.responsable)) return false;
     if (!q) return true;
     const hay = [r.responsable, r.clienteNombre, r.obligacion, r.periodo, r.estado]
       .filter(Boolean).join(" ").toLowerCase();
