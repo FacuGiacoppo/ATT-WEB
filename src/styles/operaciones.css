@@ -73,26 +73,25 @@
 
 .op-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 18px;
 }
 
-.op-toolbar-filters {
+.op-filters-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .op-select {
-  min-width: 180px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  min-width: 150px;
+  padding: 8px 12px;
+  border-radius: 10px;
   border: 1px solid rgba(26, 26, 46, 0.12);
   background: white;
   font-weight: 600;
+  font-size: 13px;
 }
 
 .op-search {
@@ -201,17 +200,62 @@
 }
 
 .op-table td {
-  padding: 14px 16px;
+  padding: 7px 12px;
   border-bottom: 1px solid rgba(26, 26, 46, 0.06);
   vertical-align: middle;
+  font-size: 13px;
 }
 
-.op-row--soon {
-  background: rgba(184, 134, 11, 0.06);
+.op-td-sm {
+  white-space: nowrap;
 }
 
-.op-row--overdue {
-  background: rgba(185, 59, 37, 0.07);
+/* Celda de tipo: naranja = obligación, celeste = tarea */
+.op-td--oblig {
+  background: rgba(210, 105, 30, 0.13);
+  border-left: 3px solid #d2691e;
+  font-weight: 600;
+  color: #7a3a0a;
+}
+
+.op-td--tarea {
+  background: rgba(74, 127, 193, 0.13);
+  border-left: 3px solid #4a7fc1;
+  font-weight: 600;
+  color: #1a3a6a;
+}
+
+/* Celda de estado con color de fondo */
+.op-td--pend {
+  background: #fff3cd;
+  color: #7a5c00;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.op-td--bad {
+  background: #f8d7da;
+  color: #842029;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.op-td--ok {
+  background: #d1e7dd;
+  color: #0a4a2a;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.op-td--late {
+  background: #155724;
+  color: #ffffff;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .op-oblig {

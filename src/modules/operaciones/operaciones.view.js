@@ -51,7 +51,6 @@ function normalizeUserKey(v) {
 
 function canCumplimentarTarea(item, user) {
   if (!item) return false;
-  if (item.tipo !== "tarea") return true; // regla pedida solo para tareas
   const resp = normalizeUserKey(item.responsable);
   const name = normalizeUserKey(user?.name);
   const email = normalizeUserKey(user?.email);
@@ -101,27 +100,32 @@ export function renderOperacionesView() {
       </div>
 
       <div class="op-toolbar">
-        <div class="op-toolbar-filters">
+        <div class="op-filters-row">
+          <select id="op-filter-cliente" class="op-select" aria-label="Filtrar por cliente">
+            <option value="">Cliente</option>
+          </select>
+          <select id="op-filter-obligacion" class="op-select" aria-label="Filtrar por obligación">
+            <option value="">Obligación / Tarea</option>
+          </select>
+          <select id="op-filter-mes-vto" class="op-select" aria-label="Filtrar por mes de vencimiento">
+            <option value="">Mes Vto.</option>
+          </select>
           <select id="op-filter-estado" class="op-select" aria-label="Filtrar por estado">
-            <option value="todos" ${appState.operaciones.estadoFilter === "todos" ? "selected" : ""}>Todos los estados</option>
+            <option value="todos" ${appState.operaciones.estadoFilter === "todos" ? "selected" : ""}>Estado</option>
             ${ESTADOS.map(
               (e) =>
                 `<option value="${escapeHtml(e)}" ${appState.operaciones.estadoFilter === e ? "selected" : ""}>${escapeHtml(e)}</option>`
             ).join("")}
           </select>
-          <select id="op-filter-organismo" class="op-select" aria-label="Filtrar por organismo">
-            <option value="todos" ${appState.operaciones.organismoFilter === "todos" ? "selected" : ""}>Todos los organismos</option>
-            ${ORGANISMOS.map(
-              (o) =>
-                `<option value="${escapeHtml(o)}" ${appState.operaciones.organismoFilter === o ? "selected" : ""}>${escapeHtml(o)}</option>`
-            ).join("")}
+          <select id="op-filter-usuario" class="op-select" aria-label="Filtrar por usuario">
+            <option value="">Usuario</option>
           </select>
         </div>
         <input
           id="op-search"
           class="req-search op-search"
           type="search"
-          placeholder="Buscar cliente, obligación, responsable..."
+          placeholder="Buscar..."
           value="${escapeHtml(appState.operaciones.search ?? "")}"
         />
       </div>
@@ -132,14 +136,13 @@ export function renderOperacionesView() {
         <table class="op-table">
           <thead>
             <tr>
-              <th><button type="button" class="op-th-sort" data-op-sort="responsable">Responsable <span class="op-sort-ico">↕</span></button></th>
+              <th><button type="button" class="op-th-sort" data-op-sort="responsable">Usuario <span class="op-sort-ico">↕</span></button></th>
               <th><button type="button" class="op-th-sort" data-op-sort="clienteNombre">Cliente <span class="op-sort-ico">↕</span></button></th>
-              <th><button type="button" class="op-th-sort" data-op-sort="obligacion">Obligación / tarea <span class="op-sort-ico">↕</span></button></th>
-              <th><button type="button" class="op-th-sort" data-op-sort="organismo">Organismo <span class="op-sort-ico">↕</span></button></th>
+              <th><button type="button" class="op-th-sort" data-op-sort="obligacion">Obligación / Tarea <span class="op-sort-ico">↕</span></button></th>
               <th><button type="button" class="op-th-sort" data-op-sort="periodo">Período <span class="op-sort-ico">↕</span></button></th>
               <th><button type="button" class="op-th-sort" data-op-sort="vencimiento">Vencimiento <span class="op-sort-ico">↕</span></button></th>
               <th><button type="button" class="op-th-sort" data-op-sort="estado">Estado <span class="op-sort-ico">↕</span></button></th>
-              <th class="op-th-actions">Acciones</th>
+              <th class="op-th-actions"></th>
             </tr>
           </thead>
           <tbody id="op-tbody"></tbody>
@@ -484,71 +487,36 @@ function renderOperacionFormModal({ title, item, tipo }) {
 }
 
 export function renderOperacionRow(item, user) {
-  const editable = canEditOperacion(user);
-  const deletable = canDeleteOperacion(user);
   const tarea = item.tipo === "tarea" || isTareaLabel(item.obligacion);
   const puedeCumplimentar = canCumplimentarTarea(item, user);
+  const cumplido = item.estado === "Cumplido" || item.estado === "Cumplido Tardio";
   const venc = item.vencimiento ? formatDisplayDate(item.vencimiento) : "—";
-  const urgency = urgencyClass(item);
-  const det = item.programacionDetalle;
-  const obligImplicitPeriodo = !tarea
-    ? `<div class="op-tarea-sched op-obl-implicit">${escapeHtml(item.tipoPeriodo || "Mes vencido")}</div>`
-    : "";
-
-  const detTxt =
-    tarea && det && typeof det === "object"
-      ? (() => {
-          const p = [];
-          if (det.diasSemana?.length) p.push(`${det.diasSemana.length} día(s) semana`);
-          if (det.diasMes?.length) p.push(`${det.diasMes.length} día(s) mes`);
-          if (det.diaAnual) p.push(`anual ${det.diaAnual}`);
-          if (det.diaFijoMes) p.push(`día ${det.diaFijoMes}`);
-          if (det.fechasFijas?.length) p.push(`${det.fechasFijas.length} fecha(s)`);
-          return p.length ? ` · ${p.join(", ")}` : "";
-        })()
-      : "";
-  const schedInfo =
-    tarea && (item.tipoPeriodo || item.tipoProgramacion)
-      ? `<div class="op-tarea-sched">${escapeHtml(item.tipoPeriodo || "—")} · ${escapeHtml(
-          coincideTipoProgramacion(item.tipoProgramacion || "") ??
-          (item.tipoProgramacion || "—")
-        )}${escapeHtml(detTxt)}</div>`
-      : "";
 
   return `
-    <tr class="op-row ${urgency}">
-      <td>${escapeHtml(item.responsable || "—")}</td>
-      <td>${escapeHtml(item.clienteNombre || "—")}</td>
-      <td>
-        <span class="op-oblig ${tarea ? "op-oblig--tarea" : "op-oblig--imp"}">${escapeHtml(item.obligacion || "—")}</span>
-        ${obligImplicitPeriodo}
-        ${schedInfo}
+    <tr class="op-row">
+      <td class="op-td-sm">${escapeHtml(item.responsable || "—")}</td>
+      <td class="op-td-sm">${escapeHtml(item.clienteNombre || "—")}</td>
+      <td class="${tarea ? "op-td--tarea" : "op-td--oblig"}">
+        ${escapeHtml(item.obligacion || "—")}
       </td>
-      <td><span class="op-org-pill">${escapeHtml(item.organismo || "—")}</span></td>
-      <td>${escapeHtml(item.periodo || "—")}</td>
-      <td><span class="op-venc-cell">${venc}</span></td>
-      <td>${renderEstadoPill(item.estado)}</td>
+      <td class="op-td-sm">${escapeHtml(item.periodo || "—")}</td>
+      <td class="op-td-sm op-venc-cell">${venc}</td>
+      <td class="${estadoTdClass(item.estado)} op-td-sm">${escapeHtml(item.estado || "—")}</td>
       <td class="op-actions">
-        ${
-          item.estado === "Cumplido" || item.estado === "Cumplido Tardio"
-            ? ""
-            : (puedeCumplimentar
-              ? `<button type="button" class="btn-primary btn-sm" data-action="cumplimentar" data-id="${escapeHtml(item.id)}">Cumplimentar</button>`
-              : "")
-        }
-        ${
-          editable
-            ? `<button type="button" class="btn-secondary btn-sm" data-action="edit-operacion" data-id="${escapeHtml(item.id)}">Editar</button>`
-            : `<span class="op-ro">Solo lectura</span>`
-        }
-        ${
-          deletable
-            ? `<button type="button" class="btn-secondary btn-sm op-btn-del" data-action="delete-operacion" data-id="${escapeHtml(item.id)}">Eliminar</button>`
-            : ""
-        }
+        ${!cumplido && puedeCumplimentar
+          ? `<button type="button" class="btn-primary btn-sm" data-action="cumplimentar" data-id="${escapeHtml(item.id)}">Cumplimentar</button>`
+          : ""}
       </td>
     </tr>
   `;
+}
+
+function estadoTdClass(estado) {
+  if (estado === "Pendiente") return "op-td--pend";
+  if (estado === "Vencido") return "op-td--bad";
+  if (estado === "Cumplido") return "op-td--ok";
+  if (estado === "Cumplido Tardio") return "op-td--late";
+  return "";
 }
 
 function renderEstadoPill(estado) {
@@ -617,19 +585,53 @@ export function computeOperacionKpis(items) {
   return { pendientes, prox7, vencidas, cerradas, total: items.length };
 }
 
+export function paintOperacionesFilters(items) {
+  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "es"));
+
+  const clientes = uniq(items.map((r) => r.clienteNombre));
+  const obligaciones = uniq(items.map((r) => r.obligacion));
+  const meses = uniq(items.map((r) => r.vencimiento?.slice(0, 7)).filter(Boolean)).sort();
+  const usuarios = uniq(items.map((r) => r.responsable));
+
+  const st = appState.operaciones;
+
+  const fill = (id, opts, current, allLabel) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = `<option value="">${allLabel}</option>` +
+      opts.map((v) => `<option value="${escapeHtml(v)}"${v === current ? " selected" : ""}>${escapeHtml(v)}</option>`).join("");
+  };
+
+  fill("op-filter-cliente", clientes, st.clienteFilter, "Cliente");
+  fill("op-filter-obligacion", obligaciones, st.obligacionFilter, "Obligación / Tarea");
+
+  const mesEl = document.getElementById("op-filter-mes-vto");
+  if (mesEl) {
+    const MESES_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+    mesEl.innerHTML = `<option value="">Mes Vto.</option>` +
+      meses.map((ym) => {
+        const [y, m] = ym.split("-");
+        const lbl = `${MESES_ES[Number(m) - 1]}-${y}`;
+        return `<option value="${escapeHtml(ym)}"${ym === st.mesVtoFilter ? " selected" : ""}>${escapeHtml(lbl)}</option>`;
+      }).join("");
+  }
+
+  fill("op-filter-usuario", usuarios, st.usuarioFilter, "Usuario");
+}
+
 export function filterAndSortOperaciones(items, state) {
   const q = (state.search ?? "").trim().toLowerCase();
   const ef = state.estadoFilter ?? "todos";
-  const of = state.organismoFilter ?? "todos";
 
   let rows = items.filter((r) => {
     if (ef !== "todos" && r.estado !== ef) return false;
-    if (of !== "todos" && r.organismo !== of) return false;
+    if (state.clienteFilter && r.clienteNombre !== state.clienteFilter) return false;
+    if (state.obligacionFilter && r.obligacion !== state.obligacionFilter) return false;
+    if (state.mesVtoFilter && !(r.vencimiento ?? "").startsWith(state.mesVtoFilter)) return false;
+    if (state.usuarioFilter && r.responsable !== state.usuarioFilter) return false;
     if (!q) return true;
-    const hay = [r.responsable, r.clienteNombre, r.obligacion, r.organismo, r.periodo, r.estado]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+    const hay = [r.responsable, r.clienteNombre, r.obligacion, r.periodo, r.estado]
+      .filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
   });
 

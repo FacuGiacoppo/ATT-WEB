@@ -35,9 +35,13 @@ export const appState = {
     search: "",
     estadoFilter: "todos",
     organismoFilter: "todos",
+    clienteFilter: "",
+    obligacionFilter: "",
+    mesVtoFilter: "",
+    usuarioFilter: "",
     sortKey: "vencimiento",
     sortDir: "asc",
-    cumplimentarContactos: []  // contacts loaded for the cumplimentar modal
+    cumplimentarContactos: []
   },
   /** Filtros de la Central de operaciones (solo superadmin). */
   centralOperaciones: {

@@ -16,7 +16,8 @@ import { estadoInicialSegunVencimiento } from "./operaciones-estado.js";
 import {
   filterAndSortOperaciones,
   computeOperacionKpis,
-  renderOperacionRow
+  renderOperacionRow,
+  paintOperacionesFilters
 } from "./operaciones.view.js";
 import { saveCumplimiento } from "./cumplimentar.service.js";
 import {
@@ -161,6 +162,7 @@ export async function loadOperaciones() {
   setOperacionesLoadError(null);
   try {
     appState.operaciones.items = await fetchOperaciones();
+    paintOperacionesFilters(appState.operaciones.items);
   } catch (e) {
     console.error("loadOperaciones:", e?.code, e?.message, e);
     appState.operaciones.items = [];
@@ -499,8 +501,20 @@ export function bindOperacionesEvents() {
       setState("operaciones.estadoFilter", event.target.value);
       paintOperacionesTable();
     }
-    if (event.target.id === "op-filter-organismo") {
-      setState("operaciones.organismoFilter", event.target.value);
+    if (event.target.id === "op-filter-cliente") {
+      setState("operaciones.clienteFilter", event.target.value);
+      paintOperacionesTable();
+    }
+    if (event.target.id === "op-filter-obligacion") {
+      setState("operaciones.obligacionFilter", event.target.value);
+      paintOperacionesTable();
+    }
+    if (event.target.id === "op-filter-mes-vto") {
+      setState("operaciones.mesVtoFilter", event.target.value);
+      paintOperacionesTable();
+    }
+    if (event.target.id === "op-filter-usuario") {
+      setState("operaciones.usuarioFilter", event.target.value);
       paintOperacionesTable();
     }
     if (event.target.id === "op-periodo" || event.target.id === "op-cliente-id") {
