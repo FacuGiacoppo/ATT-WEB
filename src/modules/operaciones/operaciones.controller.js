@@ -46,7 +46,7 @@ const FILTER_ID_TO_STATE_KEY = {
 };
 
 function closeAllFilterPanels() {
-  document.querySelectorAll(".op-mfilter-panel").forEach((p) => { p.hidden = true; });
+  document.querySelectorAll(".op-mfilter-panel").forEach((p) => p.classList.remove("is-visible"));
   document.querySelectorAll("[data-filter-toggle]").forEach((b) => b.classList.remove("is-open"));
 }
 
@@ -54,8 +54,9 @@ function updateFilterBadge(filterId, selected) {
   const countEl = document.getElementById(`${filterId}-count`);
   const btn = document.querySelector(`[data-filter-toggle="${filterId}"]`);
   if (countEl) {
-    countEl.hidden = selected.length === 0;
-    countEl.textContent = selected.length > 0 ? String(selected.length) : "";
+    const hasActive = selected.length > 0;
+    countEl.classList.toggle("is-hidden", !hasActive);
+    countEl.textContent = hasActive ? String(selected.length) : "";
   }
   if (btn) btn.classList.toggle("is-active", selected.length > 0);
 }
@@ -480,10 +481,10 @@ export function bindOperacionesEvents() {
       const id = filterToggle.dataset.filterToggle;
       const panel = document.getElementById(`${id}-panel`);
       if (!panel) return;
-      const isOpen = !panel.hidden;
+      const isOpen = panel.classList.contains("is-visible");
       closeAllFilterPanels();
       if (!isOpen) {
-        panel.hidden = false;
+        panel.classList.add("is-visible");
         filterToggle.classList.add("is-open");
       }
       return;

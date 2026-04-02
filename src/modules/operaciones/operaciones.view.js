@@ -69,7 +69,7 @@ function renderMultiFilter(id, label) {
         <span class="op-mfilter-count" id="${id}-count" hidden></span>
         <span class="op-mfilter-arrow">▾</span>
       </button>
-      <div class="op-mfilter-panel" id="${id}-panel" hidden>
+      <div class="op-mfilter-panel" id="${id}-panel">
         <div class="op-mfilter-opts" id="${id}-opts"></div>
       </div>
     </div>
@@ -596,8 +596,9 @@ function buildMultiFilterOpts(id, values, selected, labelFn) {
     </label>`;
   }).join("");
   if (countEl) {
-    countEl.hidden = selected.length === 0;
-    countEl.textContent = selected.length > 0 ? String(selected.length) : "";
+    const hasActive = selected.length > 0;
+    countEl.classList.toggle("is-hidden", !hasActive);
+    countEl.textContent = hasActive ? String(selected.length) : "";
   }
 }
 

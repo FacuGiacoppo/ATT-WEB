@@ -767,12 +767,17 @@
   font-weight: 800;
 }
 
+.op-mfilter-count.is-hidden {
+  display: none;
+}
+
 .op-mfilter-arrow {
   font-size: 11px;
   opacity: 0.55;
 }
 
 .op-mfilter-panel {
+  display: none;
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
@@ -786,6 +791,10 @@
   border-radius: 12px;
   box-shadow: 0 6px 24px rgba(26, 26, 46, 0.14);
   padding: 8px;
+}
+
+.op-mfilter-panel.is-visible {
+  display: block;
 }
 
 .op-mfilter-opts {
