@@ -17,7 +17,9 @@ function showModuleLoadError(err) {
   root.appendChild(section);
 }
 
-import("./app/bootstrap.js")
+// Resolver respecto a este archivo (funciona en GitHub Pages /nombre-repo/ aunque el <base> falle).
+const bootstrapUrl = new URL("./app/bootstrap.js", import.meta.url).href;
+import(bootstrapUrl)
   .then(({ bootstrapApp }) => {
     bootstrapApp();
   })

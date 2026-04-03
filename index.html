@@ -2,11 +2,11 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <!-- GitHub Pages (*.github.io/nombre-repo/): el <base> evita que los .js resuelvan mal y devuelvan HTML (error Unexpected token '<'). -->
+    <!-- Subpath (GitHub Pages /repo/, dominio propio, etc.): <base> para CSS y el primer <script module>. -->
     <script>
       (function () {
         try {
-          if (!/\.github\.io$/i.test(location.hostname)) return;
+          if (location.protocol === "file:") return;
           var parts = location.pathname.split("/").filter(Boolean);
           if (parts.length && /\.html?$/i.test(parts[parts.length - 1])) parts.pop();
           var href = parts.length ? "/" + parts.join("/") + "/" : "/";
@@ -49,6 +49,6 @@
     <!-- MSAL (Microsoft login) para enviar emails por Graph -->
     <script defer src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
 
-    <script type="module" src="./src/main.js?v=20260402-11"></script>
+    <script type="module" src="./src/main.js?v=20260402-12"></script>
   </body>
 </html>
