@@ -389,8 +389,3 @@ export function renderBandejaRow(r) {
     </tr>
   `;
 }
-</think>
-Corrigiendo `paintBandejaFilters`: unificando la construcción de opciones del filtro de meses.
-
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-StrReplace
