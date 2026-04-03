@@ -1,14 +1,14 @@
 import { appState } from "../../app/state.js";
 
-// ─── Dimensiones disponibles ─────────────────────────────────────────────────
+// ─── Dimensiones ──────────────────────────────────────────────────────────────
 
 const MESES_ES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 
-/** Formatea "YYYY-MM" → "abr-2025". */
 function fmtYM(raw) {
   if (!raw || !raw.includes("-")) return raw ?? "—";
   const [y, m] = raw.split("-");
-  return `${MESES_ES[(parseInt(m, 10) - 1)] ?? m}-${y}`;
+  const mi = parseInt(m, 10) - 1;
+  return `${MESES_ES[mi] ?? m}-${y}`;
 }
 
 export const DIMS = [
@@ -23,44 +23,37 @@ export const DIMS = [
   { id: "_mesReg",         label: "Mes registro", format: fmtYM },
 ];
 
-/** Devuelve el label de una dimensión por su id. */
-function dimLabel(id) {
-  return DIMS.find(d => d.id === id)?.label ?? id;
+export function dimById(id)    { return DIMS.find(d => d.id === id); }
+export function dimLabel(id)   { return dimById(id)?.label ?? id; }
+export function dimFmt(id, val) {
+  const d = dimById(id);
+  return d?.format ? d.format(val) : (val ?? "—");
 }
 
-/** Aplica el format de una dimensión a un valor. */
-function dimFmt(id, val) {
-  const dim = DIMS.find(d => d.id === id);
-  return dim?.format ? dim.format(val) : (val ?? "—");
-}
+// ─── Enriquecimiento de registros ─────────────────────────────────────────────
 
-// ─── Enriquecimiento de registros ────────────────────────────────────────────
-
-/** Agrega campos derivados (_año, _mes, _añoReg, _mesReg, _minutos) a un registro. */
 export function enrichRecord(r) {
   const fecha = r.fechaCumplimiento ?? "";
   const año   = fecha.slice(0, 4) || null;
-  const mes   = fecha.slice(0, 7) || null;           // "YYYY-MM"
-
+  const mes   = fecha.slice(0, 7) || null;
   const createdDate = r._createdAtMs ? new Date(r._createdAtMs) : null;
   const añoReg = createdDate ? String(createdDate.getFullYear()) : null;
   const mesReg = createdDate
     ? `${createdDate.getFullYear()}-${String(createdDate.getMonth() + 1).padStart(2, "0")}`
     : null;
-
   return {
     ...r,
-    _año:    año    ?? "Sin fecha",
-    _mes:    mes    ?? "sin-mes",
-    _añoReg: añoReg ?? "Sin fecha",
-    _mesReg: mesReg ?? "sin-mes",
+    _año:     año    ?? "Sin fecha",
+    _mes:     mes    ?? "sin-mes",
+    _añoReg:  añoReg ?? "Sin fecha",
+    _mesReg:  mesReg ?? "sin-mes",
     _minutos: typeof r.tiempoInsumido === "number" ? r.tiempoInsumido : 0,
   };
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function escapeHtml(v) {
+function escHtml(v) {
   return String(v ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -68,160 +61,231 @@ function escapeHtml(v) {
     .replaceAll('"', "&quot;");
 }
 
-function formatMin(n) {
-  if (!n || n <= 0) return "—";
-  if (n < 60) return `${n} min`;
-  const h = Math.floor(n / 60);
-  const m = n % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
+// ─── Dimension pills con panel de filtro ──────────────────────────────────────
 
-// ─── Sub-renders ─────────────────────────────────────────────────────────────
+export function renderDimPill(id, label, st) {
+  const inRow = (st.rowDims ?? []).includes(id);
+  const inCol = (st.colDims ?? []).includes(id);
+  const filterCount = (st.filters?.[id] ?? []).length;
 
-function renderDimPill(id, label, st) {
-  const isRow = st.rowDim === id;
-  const isCol = st.colDim === id;
-  const inUse = isRow || isCol;
-  const badge = inUse
-    ? `<span class="rt-dim-pill-badge">${isRow ? "FILAS" : "COLS"}</span>`
+  const zoneBadge = inRow
+    ? `<span class="rt-dim-badge rt-dim-badge--row">FILAS</span>`
+    : inCol
+    ? `<span class="rt-dim-badge rt-dim-badge--col">COLS</span>`
     : "";
+
+  const cntClass = filterCount > 0 ? "rt-dim-filter-count" : "rt-dim-filter-count is-hidden";
+
   return `
-    <div class="rt-dim-pill${inUse ? " rt-dim-pill--in-use" : ""}"
-         draggable="${!inUse}"
-         data-dim="${id}"
-         id="rt-dim-${id}">
-      <span class="rt-dim-pill-label">${escapeHtml(label)}</span>
-      ${badge}
+    <details class="rt-dim-pill" data-dim="${id}" id="rt-dim-${id}">
+      <summary class="rt-dim-pill-summary" draggable="true">
+        <span class="rt-dim-pill-grip">⠿</span>
+        <span class="rt-dim-pill-label">${escHtml(label)}</span>
+        <span class="${cntClass}" id="rt-fc-${id}">${filterCount > 0 ? filterCount : ""}</span>
+        ${zoneBadge}
+        <span class="rt-dim-pill-arrow">▾</span>
+      </summary>
+      <div class="rt-dim-pill-panel" id="rt-fp-${id}" draggable="false">
+        <div class="op-mfilter-pop-head">
+          <input type="search" class="op-mfilter-search"
+                 placeholder="Buscar…" autocomplete="off"
+                 data-rt-search="${id}" draggable="false" />
+          <div class="op-mfilter-actions">
+            <button type="button" class="op-mfilter-action"
+                    data-rt-filter-all="${id}">Marcar todos</button>
+            <button type="button" class="op-mfilter-action op-mfilter-action--secondary"
+                    data-rt-filter-none="${id}">Ninguno</button>
+          </div>
+        </div>
+        <div class="op-mfilter-opts" id="rt-fo-${id}"></div>
+      </div>
+    </details>`;
+}
+
+// ─── Drop zones con múltiples chips ───────────────────────────────────────────
+
+function renderZoneChips(dimIds, zone) {
+  if (dimIds.length === 0) {
+    return `<span class="rt-drop-hint">Arrastrá dimensiones aquí</span>`;
+  }
+  return dimIds.map((id, i) => `
+    ${i > 0 ? `<span class="rt-zone-sep">›</span>` : ""}
+    <button type="button" class="rt-active-dim"
+            data-rt-remove-zone="${zone}" data-rt-remove-dim="${id}">
+      ${escHtml(dimLabel(id))}
+      <span class="rt-active-dim-x">✕</span>
+    </button>`).join("");
+}
+
+export function renderDropZones(st) {
+  const row = st.rowDims ?? [];
+  const col = st.colDims ?? [];
+  return `
+    <div class="rt-drop-zone${row.length ? " rt-drop-zone--filled" : ""}"
+         data-zone="row" id="rt-drop-row">
+      <span class="rt-drop-zone-label">FILAS</span>
+      <div class="rt-zone-chips">${renderZoneChips(row, "row")}</div>
+    </div>
+    <div class="rt-drop-zone${col.length ? " rt-drop-zone--filled" : ""}"
+         data-zone="col" id="rt-drop-col">
+      <span class="rt-drop-zone-label">COLUMNAS</span>
+      <div class="rt-zone-chips">${renderZoneChips(col, "col")}</div>
     </div>`;
 }
 
-function renderDropZone(zone, dimId, st) {
-  const label = zone === "row" ? "FILAS" : "COLUMNAS";
-  const filled = Boolean(dimId);
-  const inner = filled
-    ? `<button type="button" class="rt-active-dim" data-rt-remove="${zone}">
-         ${escapeHtml(dimLabel(dimId))}
-         <span class="rt-active-dim-x">✕</span>
-       </button>`
-    : `<span class="rt-drop-hint">Arrastrá una dimensión aquí</span>`;
-  return `
-    <div class="rt-drop-zone${filled ? " rt-drop-zone--filled" : ""}"
-         data-zone="${zone}"
-         id="rt-drop-${zone}">
-      <span class="rt-drop-zone-label">${label}</span>
-      ${inner}
-    </div>`;
-}
-
-// ─── Pivot table ─────────────────────────────────────────────────────────────
+// ─── Tabla pivot (multi-dim filas, rowspan, valores en minutos) ───────────────
 
 export function renderPivot(items, st) {
-  const { rowDim, colDim } = st;
+  const rowDims = st.rowDims ?? [];
+  const colDims = st.colDims ?? [];
 
-  if (!rowDim && !colDim) {
-    const total = items.reduce((s, r) => s + r._minutos, 0);
+  if (rowDims.length === 0 && colDims.length === 0) {
+    const tot = items.reduce((s, r) => s + r._minutos, 0);
     return `<div class="rt-pivot-hint">
-      Arrastrá al menos una dimensión a <strong>Filas</strong> o <strong>Columnas</strong> para ver el reporte.
-      ${total ? `<br>Total disponible: <strong>${formatMin(total)}</strong>` : ""}
+      Arrastrá al menos una dimensión a <strong>Filas</strong> o <strong>Columnas</strong>.
+      ${tot ? `<br>Total disponible: <strong>${tot} min</strong>` : ""}
     </div>`;
   }
 
-  // Valores únicos de filas y columnas
-  const sortLocale = (a, b) => String(a).localeCompare(String(b), "es");
-  const rowVals = rowDim
-    ? [...new Set(items.map(r => r[rowDim] ?? "Sin dato"))].sort(sortLocale)
-    : null;
-  const colVals = colDim
-    ? [...new Set(items.map(r => r[colDim] ?? "Sin dato"))].sort(sortLocale)
-    : null;
+  // ── Claves de fila y columna ────────────────────────────────────────────
+  const getCombo  = r => rowDims.map(d => r[d] ?? "Sin dato");
+  const getColKey = r => colDims.length
+    ? colDims.map(d => dimFmt(d, r[d] ?? "Sin dato")).join(" / ")
+    : "__only__";
 
-  // Mapa pivot: rowKey -> colKey -> sum
-  const map = new Map();
+  // Combinaciones únicas de fila, ordenadas multi-nivel
+  const comboSet = new Set();
+  for (const r of items) comboSet.add(JSON.stringify(getCombo(r)));
+  const rowCombos = [...comboSet]
+    .map(k => JSON.parse(k))
+    .sort((a, b) => {
+      for (let d = 0; d < rowDims.length; d++) {
+        const c = String(a[d]).localeCompare(String(b[d]), "es");
+        if (c !== 0) return c;
+      }
+      return 0;
+    });
+
+  // Columnas únicas, ordenadas
+  const colKeySet = new Set();
+  for (const r of items) colKeySet.add(getColKey(r));
+  const colKeys = colDims.length
+    ? [...colKeySet].sort((a, b) => a.localeCompare(b, "es"))
+    : [];
+
+  // ── Mapa pivot ──────────────────────────────────────────────────────────
+  const pivotMap  = new Map(); // rk → ck → sum
   const colTotals = new Map();
-  let grandTotal = 0;
+  let   grandTotal = 0;
 
   for (const r of items) {
-    const rk = rowDim ? (r[rowDim] ?? "Sin dato") : "__only__";
-    const ck = colDim ? (r[colDim] ?? "Sin dato") : "__only__";
+    const rk  = JSON.stringify(getCombo(r));
+    const ck  = getColKey(r);
     const min = r._minutos;
-
-    if (!map.has(rk)) map.set(rk, new Map());
-    map.get(rk).set(ck, (map.get(rk).get(ck) ?? 0) + min);
+    if (!pivotMap.has(rk)) pivotMap.set(rk, new Map());
+    const cell = pivotMap.get(rk);
+    cell.set(ck, (cell.get(ck) ?? 0) + min);
     colTotals.set(ck, (colTotals.get(ck) ?? 0) + min);
     grandTotal += min;
   }
 
-  // ── Caso: solo columnas (sin filas) ──────────────────────────────────────
-  if (!rowDim) {
-    let html = `<div class="rt-pivot-scroll"><table class="rt-pivot-table">`;
-    html += `<thead><tr>`;
-    for (const cv of colVals) {
-      html += `<th class="rt-th-col">${escapeHtml(dimFmt(colDim, cv))}</th>`;
+  // ── Rowspan helpers ─────────────────────────────────────────────────────
+  function shouldRender(ri, d) {
+    if (ri === 0) return true;
+    for (let i = 0; i <= d; i++) {
+      if (rowCombos[ri][i] !== rowCombos[ri - 1][i]) return true;
     }
-    html += `<th class="rt-th-total">Totales</th></tr></thead>`;
-    html += `<tbody><tr>`;
-    for (const cv of colVals) {
-      const v = colTotals.get(cv) ?? 0;
-      html += `<td class="rt-td-num${!v ? " rt-td-zero" : ""}">${formatMin(v)}</td>`;
+    return false;
+  }
+  function rowspan(ri, d) {
+    let n = 1;
+    while (ri + n < rowCombos.length) {
+      let same = true;
+      for (let i = 0; i <= d; i++) {
+        if (rowCombos[ri + n][i] !== rowCombos[ri][i]) { same = false; break; }
+      }
+      if (!same) break;
+      n++;
     }
-    html += `<td class="rt-td-total rt-td-grand">${formatMin(grandTotal)}</td>`;
-    html += `</tr></tbody></table></div>`;
-    return html;
+    return n;
   }
 
-  // ── Caso: solo filas ──────────────────────────────────────────────────────
-  if (!colDim) {
-    let html = `<div class="rt-pivot-scroll"><table class="rt-pivot-table">`;
-    html += `<thead><tr><th class="rt-th-dim">${escapeHtml(dimLabel(rowDim))}</th><th class="rt-th-total">Tiempo total</th></tr></thead>`;
-    html += `<tbody>`;
-    for (const rv of rowVals) {
-      const v = map.get(rv)?.get("__only__") ?? 0;
-      html += `<tr>
-        <td class="rt-td-dim">${escapeHtml(dimFmt(rowDim, rv))}</td>
-        <td class="rt-td-num${!v ? " rt-td-zero" : ""}">${formatMin(v)}</td>
-      </tr>`;
-    }
-    html += `</tbody>`;
-    html += `<tfoot><tr>
-      <td class="rt-td-foot">Totales</td>
-      <td class="rt-td-foot rt-td-grand">${formatMin(grandTotal)}</td>
-    </tr></tfoot>`;
-    html += `</table></div>`;
-    return html;
-  }
+  // ── Render ──────────────────────────────────────────────────────────────
+  const onlyCols = rowCombos.length === 0; // solo columnas, sin filas
+  const onlyRows = colKeys.length === 0;
 
-  // ── Caso: filas + columnas (pivot completo) ───────────────────────────────
   let html = `<div class="rt-pivot-scroll"><table class="rt-pivot-table">`;
-  html += `<thead><tr>`;
-  html += `<th class="rt-th-dim">${escapeHtml(dimLabel(rowDim))}</th>`;
-  for (const cv of colVals) {
-    html += `<th class="rt-th-col">${escapeHtml(dimFmt(colDim, cv))}</th>`;
-  }
-  html += `<th class="rt-th-total">Totales</th></tr></thead>`;
 
-  html += `<tbody>`;
-  for (const rv of rowVals) {
-    const rowMap = map.get(rv) ?? new Map();
-    const rowTotal = [...rowMap.values()].reduce((s, v) => s + v, 0);
-    html += `<tr>`;
-    html += `<td class="rt-td-dim">${escapeHtml(dimFmt(rowDim, rv))}</td>`;
-    for (const cv of colVals) {
-      const v = rowMap.get(cv) ?? 0;
-      html += `<td class="rt-td-num${!v ? " rt-td-zero" : ""}">${formatMin(v)}</td>`;
+  // Header
+  html += `<thead><tr>`;
+  for (const d of rowDims) {
+    html += `<th class="rt-th-dim">${escHtml(dimLabel(d))}</th>`;
+  }
+  if (onlyRows) {
+    html += `<th class="rt-th-total">Minutos</th>`;
+  } else {
+    for (const ck of colKeys) {
+      html += `<th class="rt-th-col">${escHtml(ck)}</th>`;
     }
-    html += `<td class="rt-td-total">${formatMin(rowTotal)}</td>`;
+    html += `<th class="rt-th-total">Total</th>`;
+  }
+  html += `</tr></thead>`;
+
+  // Body
+  html += `<tbody>`;
+  if (onlyCols) {
+    // Sin filas: una sola fila con todos los totales por columna
+    html += `<tr>`;
+    for (const ck of colKeys) {
+      const v = colTotals.get(ck) ?? 0;
+      html += `<td class="rt-td-num${!v ? " rt-td-zero" : ""}">${v || "—"}</td>`;
+    }
+    html += `<td class="rt-td-total rt-td-grand">${grandTotal || "—"}</td>`;
     html += `</tr>`;
+  } else {
+    for (let i = 0; i < rowCombos.length; i++) {
+      const combo  = rowCombos[i];
+      const rk     = JSON.stringify(combo);
+      const rowMap = pivotMap.get(rk) ?? new Map();
+      html += `<tr>`;
+
+      // Celdas de dimensiones de fila con rowspan
+      for (let d = 0; d < rowDims.length; d++) {
+        if (!shouldRender(i, d)) continue;
+        const rs  = rowspan(i, d);
+        const val = dimFmt(rowDims[d], combo[d]);
+        const cls = d === 0 ? " rt-td-dim--root" : " rt-td-dim--child";
+        html += `<td class="rt-td-dim${cls}"${rs > 1 ? ` rowspan="${rs}"` : ""}>${escHtml(val)}</td>`;
+      }
+
+      // Datos
+      if (onlyRows) {
+        const v = rowMap.get("__only__") ?? 0;
+        html += `<td class="rt-td-num${!v ? " rt-td-zero" : ""}">${v || "—"}</td>`;
+      } else {
+        for (const ck of colKeys) {
+          const v = rowMap.get(ck) ?? 0;
+          html += `<td class="rt-td-num${!v ? " rt-td-zero" : ""}">${v || "—"}</td>`;
+        }
+        const rowTot = [...rowMap.values()].reduce((s, v) => s + v, 0);
+        html += `<td class="rt-td-total">${rowTot || "—"}</td>`;
+      }
+      html += `</tr>`;
+    }
   }
   html += `</tbody>`;
 
-  html += `<tfoot><tr>`;
-  html += `<td class="rt-td-foot">Totales</td>`;
-  for (const cv of colVals) {
-    const v = colTotals.get(cv) ?? 0;
-    html += `<td class="rt-td-foot rt-td-num">${formatMin(v)}</td>`;
+  // Pie de totales (solo con columnas)
+  if (!onlyRows && colKeys.length > 0) {
+    html += `<tfoot><tr>`;
+    html += `<td class="rt-td-foot" colspan="${rowDims.length || 1}">Totales</td>`;
+    for (const ck of colKeys) {
+      const v = colTotals.get(ck) ?? 0;
+      html += `<td class="rt-td-foot rt-td-num">${v || "—"}</td>`;
+    }
+    html += `<td class="rt-td-foot rt-td-grand">${grandTotal || "—"}</td>`;
+    html += `</tr></tfoot>`;
   }
-  html += `<td class="rt-td-foot rt-td-grand">${formatMin(grandTotal)}</td>`;
-  html += `</tr></tfoot>`;
 
   html += `</table></div>`;
   return html;
@@ -238,8 +302,9 @@ export function renderReporteTiemposView() {
           <div class="req-eyebrow">Productividad · tiempo</div>
           <h1 class="req-title">Reporte de tiempos</h1>
           <p class="req-subtitle">
-            Analizá el tiempo insumido en cada obligación.
-            Arrastrá las dimensiones a <strong>Filas</strong> y <strong>Columnas</strong> para pivotear los datos.
+            Filtrá cada dimensión con el desplegable y luego arrastrá a
+            <strong>Filas</strong> o <strong>Columnas</strong> para armar la tabla pivot.
+            Podés poner varias dimensiones en cada eje.
           </p>
         </div>
       </div>
@@ -248,10 +313,9 @@ export function renderReporteTiemposView() {
 
       <div class="rt-workspace">
 
-        <!-- Panel izquierdo: chips de dimensiones -->
         <div class="rt-dims-panel">
           <div class="rt-dims-title">DIMENSIONES</div>
-          <p class="rt-dims-hint">Arrastrá a Filas o Columnas</p>
+          <p class="rt-dims-hint">Filtrá y arrastrá a Filas / Columnas</p>
           <div class="rt-dims-list" id="rt-dims-list">
             ${DIMS.map(d => renderDimPill(d.id, d.label, st)).join("")}
           </div>
@@ -265,27 +329,17 @@ export function renderReporteTiemposView() {
           </div>
         </div>
 
-        <!-- Área principal: builder + tabla -->
         <div class="rt-main">
-
-          <!-- Builder: zonas de drop -->
           <div class="rt-builder" id="rt-builder">
-            ${renderDropZone("row", st.rowDim, st)}
-            ${renderDropZone("col", st.colDim, st)}
+            ${renderDropZones(st)}
           </div>
-
-          <!-- Tabla pivot -->
           <div class="rt-pivot-wrap" id="rt-pivot-wrap">
             <div class="rt-pivot-hint">
-              Arrastrá al menos una dimensión a <strong>Filas</strong> o <strong>Columnas</strong> para ver el reporte.
+              Arrastrá al menos una dimensión a <strong>Filas</strong> o <strong>Columnas</strong>.
             </div>
           </div>
-
         </div>
-      </div>
-    </section>
-  `;
-}
 
-// Exportamos helpers para que el controller pueda re-renderizar parcialmente
-export { renderDimPill, renderDropZone };
+      </div>
+    </section>`;
+}

@@ -16,7 +16,7 @@
 
 .rt-dims-panel {
   flex-shrink: 0;
-  width: 200px;
+  width: 210px;
   background: white;
   border: 1px solid rgba(26, 26, 46, 0.1);
   border-radius: 16px;
@@ -42,7 +42,7 @@
 .rt-dims-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 /* Separador y caja de valor */
@@ -56,7 +56,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 10px;
+  padding: 10px;
   background: rgba(200, 71, 42, 0.06);
   border: 1px solid rgba(200, 71, 42, 0.2);
   border-radius: 10px;
@@ -82,51 +82,129 @@
   color: var(--ink);
 }
 
-/* ── Dimension pills ─────────────────────────────────────────────────────── */
+/* ── Dimension pills (details/summary) ───────────────────────────────────── */
 
 .rt-dim-pill {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 8px 10px;
+  position: relative;
   background: var(--paper);
   border: 1px solid rgba(26, 26, 46, 0.12);
   border-radius: 8px;
-  cursor: grab;
   user-select: none;
-  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  transition: border-color 0.15s;
 }
 
-.rt-dim-pill:hover:not(.rt-dim-pill--in-use) {
+.rt-dim-pill:hover {
+  border-color: rgba(26, 26, 46, 0.25);
+}
+
+details.rt-dim-pill[open] {
+  border-color: rgba(26, 26, 46, 0.25);
   background: white;
-  border-color: rgba(26, 26, 46, 0.22);
+  z-index: 100;
 }
 
-.rt-dim-pill--in-use {
-  opacity: 0.45;
-  cursor: default;
+/* Remove default disclosure triangle */
+.rt-dim-pill > summary { list-style: none; }
+.rt-dim-pill > summary::-webkit-details-marker { display: none; }
+.rt-dim-pill > summary::marker { display: none; }
+
+.rt-dim-pill-summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 8px;
+  cursor: grab;
+  border-radius: 7px;
+}
+
+.rt-dim-pill-summary:active {
+  cursor: grabbing;
 }
 
 .rt-dim-pill--dragging {
-  opacity: 0.3;
+  opacity: 0.35;
+}
+
+.rt-dim-pill-grip {
+  font-size: 13px;
+  color: var(--ink-muted);
+  opacity: 0.45;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .rt-dim-pill-label {
   font-size: 12px;
   font-weight: 600;
   color: var(--ink);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.rt-dim-pill-badge {
+.rt-dim-pill-arrow {
+  font-size: 10px;
+  color: var(--ink-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+details.rt-dim-pill[open] .rt-dim-pill-arrow {
+  transform: rotate(180deg);
+}
+
+/* Contador de filtros activos */
+.rt-dim-filter-count {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--accent);
+  color: white;
+  border-radius: 10px;
+  padding: 1px 5px;
+  min-width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rt-dim-filter-count.is-hidden {
+  display: none;
+}
+
+/* Badges de zona (FILAS / COLS) */
+.rt-dim-badge {
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--accent);
-  background: rgba(200, 71, 42, 0.1);
+  letter-spacing: 0.05em;
   border-radius: 4px;
-  padding: 2px 5px;
+  padding: 2px 4px;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rt-dim-badge--row {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.rt-dim-badge--col {
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+}
+
+/* Panel de filtro (dropdown) */
+.rt-dim-pill-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 200;
+  width: 260px;
+  background: white;
+  border: 1px solid rgba(26, 26, 46, 0.13);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(26, 26, 46, 0.13);
+  overflow: hidden;
 }
 
 /* ── Main (builder + tabla) ──────────────────────────────────────────────── */
@@ -150,15 +228,16 @@
 .rt-drop-zone {
   flex: 1;
   min-width: 220px;
-  min-height: 64px;
+  min-height: 56px;
   border: 2px dashed rgba(26, 26, 46, 0.18);
   border-radius: 12px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: white;
   transition: border-color 0.15s, background 0.15s;
+  flex-wrap: wrap;
 }
 
 .rt-drop-zone--over {
@@ -168,7 +247,7 @@
 
 .rt-drop-zone--filled {
   border-style: solid;
-  border-color: rgba(26, 26, 46, 0.2);
+  border-color: rgba(26, 26, 46, 0.18);
 }
 
 .rt-drop-zone-label {
@@ -185,20 +264,36 @@
   font-style: italic;
 }
 
-/* Dimensión activa dentro del drop zone */
+/* Chips dentro de la zona */
+.rt-zone-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.rt-zone-sep {
+  font-size: 12px;
+  color: var(--ink-muted);
+  opacity: 0.5;
+}
+
+/* Chip de dimensión activa */
 .rt-active-dim {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: 5px;
+  padding: 5px 9px;
   background: var(--ink);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
+  white-space: nowrap;
 }
 
 .rt-active-dim:hover {
@@ -207,7 +302,7 @@
 
 .rt-active-dim-x {
   font-size: 10px;
-  opacity: 0.7;
+  opacity: 0.65;
 }
 
 /* ── Tabla pivot ──────────────────────────────────────────────────────────── */
@@ -253,7 +348,7 @@
 
 .rt-th-dim {
   color: var(--ink);
-  min-width: 160px;
+  min-width: 140px;
 }
 
 .rt-th-col {
@@ -269,7 +364,7 @@
 
 /* Celdas */
 .rt-pivot-table td {
-  padding: 9px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid rgba(26, 26, 46, 0.06);
   vertical-align: middle;
 }
@@ -277,6 +372,19 @@
 .rt-td-dim {
   font-weight: 500;
   color: var(--ink);
+}
+
+/* Primer nivel de fila: más énfasis */
+.rt-td-dim--root {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Niveles anidados: indentado y más suave */
+.rt-td-dim--child {
+  font-weight: 500;
+  color: var(--ink-light);
+  padding-left: 24px;
 }
 
 .rt-td-num {
@@ -299,7 +407,7 @@
   border-left: 1px solid rgba(26, 26, 46, 0.08);
 }
 
-/* Filas de hover */
+/* Hover */
 .rt-pivot-table tbody tr:hover td {
   background: rgba(26, 26, 46, 0.025);
 }

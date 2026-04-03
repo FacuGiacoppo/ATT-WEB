@@ -53,12 +53,13 @@ export const appState = {
     filterVencMonth: "",
     filterObligacionContains: ""
   },
-  /** Reporte de tiempos insumidos (superadmin / admin). */
+  /** Reporte de tiempos insumidos (superadmin / admin / colaborador solo los propios). */
   reporteTiempos: {
     items: [],
     loadError: null,
-    rowDim: null,
-    colDim: null
+    rowDims: [],
+    colDims: [],
+    filters: {}
   },
   /** Registro de cumplimientos / bandeja de salida (misma visibilidad que operaciones). */
   bandejaCumplimientos: {
