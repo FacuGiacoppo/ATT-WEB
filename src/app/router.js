@@ -36,6 +36,13 @@ export async function navigate(route) {
   await renderRoute();
 }
 
+/** Tras login; vive acá (no en bootstrap) para evitar import circular con auth.controller. */
+export async function setAuthenticatedUser(user) {
+  appState.session.user = user;
+  appState.session.isAuthenticated = true;
+  await navigate("requerimientos");
+}
+
 export async function renderRoute() {
   const app = document.getElementById("app");
   if (!app) return;

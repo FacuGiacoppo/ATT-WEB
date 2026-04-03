@@ -1,5 +1,5 @@
 import { loginWithEmail } from "./auth.service.js";
-import { setAuthenticatedUser } from "../../app/bootstrap.js";
+import { setAuthenticatedUser } from "../../app/router.js";
 
 function getFriendlyError(code) {
   const messages = {

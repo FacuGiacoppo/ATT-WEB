@@ -53,12 +53,6 @@ function bindGlobalEvents() {
   bindBandejaCumplimientosEvents();
 }
 
-export async function setAuthenticatedUser(user) {
-  appState.session.user = user;
-  appState.session.isAuthenticated = true;
-  await navigate("requerimientos");
-}
-
 export async function handleLogout() {
   await logout();
   resetSession();
