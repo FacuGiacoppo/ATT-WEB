@@ -151,17 +151,16 @@ function isTareaLabel(obligacion) {
 
 function renderMultiFilter(id, label) {
   return `
-    <div class="op-mfilter" data-filter-id="${id}">
-      <button type="button" class="op-mfilter-btn" data-filter-toggle="${id}"
-        onclick="window.__opFilterToggle('${id}', this, event)">
+    <details class="op-mfilter" data-filter-id="${id}">
+      <summary class="op-mfilter-btn">
         <span class="op-mfilter-label">${escapeHtml(label)}</span>
         <span class="op-mfilter-count is-hidden" id="${id}-count"></span>
         <span class="op-mfilter-arrow">▾</span>
-      </button>
+      </summary>
       <div class="op-mfilter-panel" id="${id}-panel">
         <div class="op-mfilter-opts" id="${id}-opts"></div>
       </div>
-    </div>
+    </details>
   `;
 }
 

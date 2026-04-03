@@ -729,7 +729,16 @@
 /* ── Multi-select filter dropdown ─────────────────────────── */
 .op-mfilter {
   position: relative;
+  list-style: none;
 }
+
+/* Remove default <details>/<summary> markers */
+.op-mfilter > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.op-mfilter > summary::-webkit-details-marker { display: none; }
+.op-mfilter > summary::marker { display: none; }
 
 .op-mfilter-btn {
   display: inline-flex;
@@ -741,24 +750,24 @@
   background: white;
   font-weight: 600;
   font-size: 13px;
-  cursor: pointer;
   white-space: nowrap;
   transition: border-color 0.15s;
+  user-select: none;
 }
 
 .op-mfilter-btn:hover {
   border-color: rgba(26, 26, 46, 0.28);
 }
 
-.op-mfilter-btn.is-active {
+details.op-mfilter[open] .op-mfilter-btn {
+  border-color: rgba(26, 26, 46, 0.28);
+  box-shadow: 0 0 0 3px rgba(26, 26, 46, 0.06);
+}
+
+details.op-mfilter.is-active .op-mfilter-btn {
   border-color: var(--accent, #c94a3a);
   background: rgba(201, 74, 58, 0.07);
   color: var(--accent, #c94a3a);
-}
-
-.op-mfilter-btn.is-open {
-  border-color: rgba(26, 26, 46, 0.28);
-  box-shadow: 0 0 0 3px rgba(26, 26, 46, 0.06);
 }
 
 .op-mfilter-count {
@@ -801,7 +810,7 @@
   padding: 8px;
 }
 
-.op-mfilter-panel.is-visible {
+details.op-mfilter[open] .op-mfilter-panel {
   display: block;
 }
 
