@@ -9,7 +9,7 @@ function siteBaseForModules() {
 }
 
 function bootstrapModuleUrl() {
-  return new URL("src/app/bootstrap.js", siteBaseForModules()).href;
+  return new URL("src/app/bootstrap.js?v=20260402-10", siteBaseForModules()).href;
 }
 
 function showModuleLoadError(err) {
