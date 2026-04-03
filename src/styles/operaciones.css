@@ -342,10 +342,9 @@
 }
 
 .op-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .btn-sm {

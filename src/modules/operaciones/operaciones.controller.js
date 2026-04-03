@@ -1,5 +1,6 @@
 import { appState, setState } from "../../app/state.js";
 import { refreshRoute } from "../../app/route-refresh.js";
+import { openInfoModal } from "../../components/modal.js";
 import {
   fetchOperaciones,
   createOperacion,
@@ -61,6 +62,19 @@ function updateFilterBadge(filterId, selected) {
   }
   if (btn) btn.classList.toggle("is-active", selected.length > 0);
 }
+
+// Global handler for filter dropdown buttons (called via inline onclick)
+window.__opFilterToggle = function(id, btn, evt) {
+  evt.stopPropagation();
+  const panel = document.getElementById(`${id}-panel`);
+  if (!panel) return;
+  const isOpen = panel.classList.contains("is-visible");
+  closeAllFilterPanels();
+  if (!isOpen) {
+    panel.classList.add("is-visible");
+    btn.classList.add("is-open");
+  }
+};
 
 let opEventsBound = false;
 
@@ -183,31 +197,11 @@ async function closeModal() {
   await refreshRoute();
 }
 
-function initFilterDropdowns() {
-  document.querySelectorAll("[data-filter-toggle]").forEach((btn) => {
-    if (btn.dataset.filterBound) return;
-    btn.dataset.filterBound = "1";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.filterToggle;
-      const panel = document.getElementById(`${id}-panel`);
-      if (!panel) return;
-      const isOpen = panel.classList.contains("is-visible");
-      closeAllFilterPanels();
-      if (!isOpen) {
-        panel.classList.add("is-visible");
-        btn.classList.add("is-open");
-      }
-    });
-  });
-}
-
 export async function loadOperaciones() {
   setOperacionesLoadError(null);
   try {
     appState.operaciones.items = await fetchOperaciones();
     paintOperacionesFilters(appState.operaciones.items);
-    initFilterDropdowns();
   } catch (e) {
     console.error("loadOperaciones:", e?.code, e?.message, e);
     appState.operaciones.items = [];
@@ -386,7 +380,7 @@ export function bindOperacionesEvents() {
       const item = appState.operaciones.items.find((x) => x.id === id);
       if (!item) return;
       if (!canCumplimentarTarea(item, appState.session.user)) {
-        alert("Solo el responsable puede cumplimentar esta tarea. Podés verla, pero no cerrarla.");
+        await openInfoModal("Solo el responsable puede cumplimentar esta tarea.");
         return;
       }
       try {
@@ -621,24 +615,24 @@ async function confirmCumplimentar() {
   const id = document.getElementById("op-cump-id")?.value?.trim();
   const item = appState.operaciones.items.find((x) => x.id === id) || appState.ui.modalPayload;
   if (!item?.id) {
-    alert("No se encontró la operación a cumplimentar.");
+    await openInfoModal("No se encontró la operación a cumplimentar.");
     return;
   }
   if (!canCumplimentarTarea(item, appState.session.user)) {
-    alert("Solo el responsable puede cumplimentar esta tarea.");
+    await openInfoModal("Solo el responsable puede cumplimentar esta tarea.");
     return;
   }
 
   const fechaCumplimiento = document.getElementById("op-cump-fecha")?.value ?? "";
   if (!fechaCumplimiento) {
-    alert("Ingresá la fecha de cumplimiento.");
+    await openInfoModal("Ingresá la fecha de cumplimiento.");
     return;
   }
 
   const tiempoStr = document.getElementById("op-cump-tiempo")?.value?.trim() ?? "";
   const tiempoInsumidoMin = parseInt(tiempoStr, 10);
   if (!tiempoStr || isNaN(tiempoInsumidoMin) || tiempoInsumidoMin < 1) {
-    alert("Ingresá el tiempo insumido en minutos (mínimo 1 minuto).");
+    await openInfoModal("Ingresá el tiempo insumido en minutos (mínimo 1 minuto).");
     return;
   }
 
@@ -661,7 +655,7 @@ async function confirmCumplimentar() {
     : [];
 
   if (requiereEnvio && destinatarios.length === 0) {
-    alert("Seleccioná al menos un destinatario con email.");
+    await openInfoModal("Seleccioná al menos un destinatario con email.");
     return;
   }
 
@@ -704,7 +698,7 @@ async function confirmCumplimentar() {
     }
   } catch (e) {
     console.error(e);
-    alert("No se pudo registrar el cumplimiento.");
+    await openInfoModal("No se pudo registrar el cumplimiento. Revisá tu conexión e intentá de nuevo.");
   }
 }
 
