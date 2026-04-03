@@ -183,11 +183,31 @@ async function closeModal() {
   await refreshRoute();
 }
 
+function initFilterDropdowns() {
+  document.querySelectorAll("[data-filter-toggle]").forEach((btn) => {
+    if (btn.dataset.filterBound) return;
+    btn.dataset.filterBound = "1";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.filterToggle;
+      const panel = document.getElementById(`${id}-panel`);
+      if (!panel) return;
+      const isOpen = panel.classList.contains("is-visible");
+      closeAllFilterPanels();
+      if (!isOpen) {
+        panel.classList.add("is-visible");
+        btn.classList.add("is-open");
+      }
+    });
+  });
+}
+
 export async function loadOperaciones() {
   setOperacionesLoadError(null);
   try {
     appState.operaciones.items = await fetchOperaciones();
     paintOperacionesFilters(appState.operaciones.items);
+    initFilterDropdowns();
   } catch (e) {
     console.error("loadOperaciones:", e?.code, e?.message, e);
     appState.operaciones.items = [];
@@ -474,21 +494,6 @@ export function bindOperacionesEvents() {
     // Close filter panels when clicking outside
     if (!event.target.closest(".op-mfilter")) {
       closeAllFilterPanels();
-    }
-
-    // Toggle multi-select filter panel
-    const filterToggle = event.target.closest("[data-filter-toggle]");
-    if (filterToggle) {
-      const id = filterToggle.dataset.filterToggle;
-      const panel = document.getElementById(`${id}-panel`);
-      if (!panel) return;
-      const isOpen = panel.classList.contains("is-visible");
-      closeAllFilterPanels();
-      if (!isOpen) {
-        panel.classList.add("is-visible");
-        filterToggle.classList.add("is-open");
-      }
-      return;
     }
 
     // Vista fecha tab
