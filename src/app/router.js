@@ -25,11 +25,15 @@ import {
   canSeeModule,
   canUploadEerr
 } from "../utils/permissions.js";
-import { renderCentralOperacionesView } from "../modules/central-operaciones/central-operaciones.view.js";
+import {
+  renderCentralOperacionesView,
+  paintCentralOperacionesFilters
+} from "../modules/central-operaciones/central-operaciones.view.js";
 import {
   initCentralOperacionesPage,
   paintCentralOperacionesTable
 } from "../modules/central-operaciones/central-operaciones.controller.js";
+import { renderInicioView } from "../modules/inicio/inicio.view.js";
 import { renderReporteTiemposView } from "../modules/reporte-tiempos/reporte-tiempos.view.js";
 import {
   loadReporteTiempos,
@@ -45,7 +49,7 @@ export async function navigate(route) {
 export async function setAuthenticatedUser(user) {
   appState.session.user = user;
   appState.session.isAuthenticated = true;
-  await navigate("requerimientos");
+  await navigate("inicio");
 }
 
 export async function renderRoute() {
@@ -58,7 +62,7 @@ export async function renderRoute() {
   }
 
   if (appState.ui.activeRoute === "login") {
-    appState.ui.activeRoute = "requerimientos";
+    appState.ui.activeRoute = "inicio";
   }
 
   try {
@@ -70,6 +74,17 @@ export async function renderRoute() {
     }
 
     switch (appState.ui.activeRoute) {
+    case "inicio":
+      if (!canSeeModule(appState.session.user, "inicio")) {
+        content.innerHTML = `
+          <section class="page-section">
+            <div class="page-empty">No tenés permiso para acceder a Inicio.</div>
+          </section>`;
+        break;
+      }
+      content.innerHTML = renderInicioView();
+      break;
+
     case "clientes":
       await loadClientes();
       content.innerHTML = renderClientesView();
@@ -116,6 +131,7 @@ export async function renderRoute() {
       }
       await initCentralOperacionesPage();
       content.innerHTML = renderCentralOperacionesView();
+      paintCentralOperacionesFilters(appState.operaciones.items ?? []);
       paintCentralOperacionesTable();
       break;
 

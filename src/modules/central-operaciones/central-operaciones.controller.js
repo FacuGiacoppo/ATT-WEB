@@ -12,40 +12,50 @@ import {
   downloadPlantillaOperaciones,
   runOperacionesImport
 } from "../operaciones/operaciones-import.js";
-import { renderCentralOperacionesView, renderCentralRow } from "./central-operaciones.view.js";
+import { paintCentralOperacionesFilters, renderCentralRow } from "./central-operaciones.view.js";
 import { esNombreTareaPlanIn } from "../../data/operaciones-scheduling.js";
 
 const centralSelected = new Set();
 let centralBound = false;
 
+const CO_FILTER_ID_TO_STATE_KEY = {
+  "co-filter-estado": "estadoFilter",
+  "co-filter-cliente": "clienteFilter",
+  "co-filter-obligacion": "obligacionFilter",
+  "co-filter-mes-vto": "mesVtoFilter",
+  "co-filter-usuario": "usuarioFilter"
+};
+
+function updateCoFilterBadge(filterId, selected) {
+  const countEl = document.getElementById(`${filterId}-count`);
+  const details = document.querySelector(`details.op-mfilter[data-filter-id="${filterId}"]`);
+  if (countEl) {
+    const hasActive = selected.length > 0;
+    countEl.classList.toggle("is-hidden", !hasActive);
+    countEl.textContent = hasActive ? String(selected.length) : "";
+  }
+  if (details) details.classList.toggle("is-active", selected.length > 0);
+}
+
 function getCentralFiltered() {
   const items = appState.operaciones.items ?? [];
   const f = appState.centralOperaciones;
-
-  const qText = (f.filterText ?? "").trim().toLowerCase();
-  const qObl = (f.filterObligacionContains ?? "").trim().toLowerCase();
+  const q = (f.search ?? "").trim().toLowerCase();
 
   return items.filter((it) => {
-    if (f.filterClienteId && it.clienteId !== f.filterClienteId) return false;
-    if (f.filterTipo === "obligacion") {
-      if (it.tipo === "tarea" || esNombreTareaPlanIn(it.obligacion)) return false;
+    if (f.estadoFilter?.length > 0 && !f.estadoFilter.includes(it.estado)) return false;
+    if (f.clienteFilter?.length > 0 && !f.clienteFilter.includes(it.clienteNombre)) return false;
+    if (f.obligacionFilter?.length > 0 && !f.obligacionFilter.includes(it.obligacion)) return false;
+    if (f.mesVtoFilter?.length > 0 && !f.mesVtoFilter.some((m) => (it.vencimiento ?? "").startsWith(m))) {
+      return false;
     }
-    if (f.filterTipo === "tarea") {
-      if (it.tipo !== "tarea" && !esNombreTareaPlanIn(it.obligacion)) return false;
-    }
-    if (f.filterVencMonth) {
-      const iso = it.vencimiento ? String(it.vencimiento).slice(0, 10) : "";
-      if (!iso || iso.slice(0, 7) !== f.filterVencMonth) return false;
-    }
-    if (qObl && !(it.obligacion || "").toLowerCase().includes(qObl)) return false;
-    if (qText) {
-      const hay = [it.clienteNombre, it.obligacion, it.responsable, it.periodo, it.estado]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      if (!hay.includes(qText)) return false;
-    }
-    return true;
+    if (f.usuarioFilter?.length > 0 && !f.usuarioFilter.includes(it.responsable)) return false;
+    if (!q) return true;
+    const hay = [it.responsable, it.clienteNombre, it.obligacion, it.periodo, it.estado]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
   });
 }
 
@@ -79,6 +89,7 @@ export function paintCentralOperacionesTable() {
 
 async function afterImportReload() {
   await loadOperaciones();
+  paintCentralOperacionesFilters(appState.operaciones.items ?? []);
   paintCentralOperacionesTable();
 }
 
@@ -119,13 +130,56 @@ export function bindCentralOperacionesEvents() {
     }
 
     if (ev.target.closest("#co-btn-clear-filters")) {
-      setState("centralOperaciones.filterClienteId", "");
-      setState("centralOperaciones.filterTipo", "todos");
-      setState("centralOperaciones.filterText", "");
-      setState("centralOperaciones.filterVencMonth", "");
-      setState("centralOperaciones.filterObligacionContains", "");
+      setState("centralOperaciones.search", "");
+      setState("centralOperaciones.clienteFilter", []);
+      setState("centralOperaciones.obligacionFilter", []);
+      setState("centralOperaciones.mesVtoFilter", []);
+      setState("centralOperaciones.estadoFilter", []);
+      setState("centralOperaciones.usuarioFilter", []);
       await refreshRoute();
       paintCentralOperacionesTable();
+      return;
+    }
+
+    const mfilterAll = ev.target.closest("[data-mfilter-all]");
+    if (mfilterAll && mfilterAll.closest("#co-filters-row")) {
+      ev.preventDefault();
+      const filterId = mfilterAll.dataset.mfilterAll;
+      const stateKey = CO_FILTER_ID_TO_STATE_KEY[filterId];
+      const optsEl = document.getElementById(`${filterId}-opts`);
+      if (stateKey && optsEl) {
+        const selected = [];
+        optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
+          const inp = row.querySelector("input[type='checkbox']");
+          if (inp) {
+            inp.checked = true;
+            try {
+              selected.push(decodeURIComponent(inp.value));
+            } catch {
+              selected.push(inp.value);
+            }
+          }
+        });
+        setState(`centralOperaciones.${stateKey}`, selected);
+        updateCoFilterBadge(filterId, selected);
+        paintCentralOperacionesTable();
+      }
+      return;
+    }
+
+    const mfilterClear = ev.target.closest("[data-mfilter-clear]");
+    if (mfilterClear && mfilterClear.closest("#co-filters-row")) {
+      ev.preventDefault();
+      const filterId = mfilterClear.dataset.mfilterClear;
+      const stateKey = CO_FILTER_ID_TO_STATE_KEY[filterId];
+      if (stateKey) {
+        setState(`centralOperaciones.${stateKey}`, []);
+        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
+          c.checked = false;
+        });
+        updateCoFilterBadge(filterId, []);
+        paintCentralOperacionesTable();
+      }
       return;
     }
 
@@ -265,18 +319,29 @@ export function bindCentralOperacionesEvents() {
       return;
     }
 
-    if (
-      ev.target.id === "co-filter-cliente" ||
-      ev.target.id === "co-filter-tipo" ||
-      ev.target.id === "co-filter-venc-month" ||
-      ev.target.id === "co-filter-oblig" ||
-      ev.target.id === "co-filter-text"
-    ) {
-      if (ev.target.id === "co-filter-cliente") setState("centralOperaciones.filterClienteId", ev.target.value);
-      if (ev.target.id === "co-filter-tipo") setState("centralOperaciones.filterTipo", ev.target.value);
-      if (ev.target.id === "co-filter-venc-month") setState("centralOperaciones.filterVencMonth", ev.target.value);
-      if (ev.target.id === "co-filter-oblig") setState("centralOperaciones.filterObligacionContains", ev.target.value);
-      if (ev.target.id === "co-filter-text") setState("centralOperaciones.filterText", ev.target.value);
+    const coCheckbox = ev.target.closest(".op-mfilter-panel input[type='checkbox']");
+    if (coCheckbox && coCheckbox.closest("#co-filters-row")) {
+      const panel = coCheckbox.closest(".op-mfilter-panel");
+      const filterId = panel?.id?.replace("-panel", "");
+      const stateKey = filterId ? CO_FILTER_ID_TO_STATE_KEY[filterId] : null;
+      if (stateKey) {
+        const selected = [...document.querySelectorAll(`input[name="${filterId}"]:checked`)].map((el) => {
+          try {
+            return decodeURIComponent(el.value);
+          } catch {
+            return el.value;
+          }
+        });
+        setState(`centralOperaciones.${stateKey}`, selected);
+        updateCoFilterBadge(filterId, selected);
+        paintCentralOperacionesTable();
+      }
+    }
+  });
+
+  document.addEventListener("input", (ev) => {
+    if (ev.target.id === "co-search") {
+      setState("centralOperaciones.search", ev.target.value);
       paintCentralOperacionesTable();
     }
   });

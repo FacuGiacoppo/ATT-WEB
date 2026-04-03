@@ -1,4 +1,5 @@
 import { appState } from "../../app/state.js";
+import { buildMultiFilterOpts, renderMultiFilter } from "../operaciones/operaciones.view.js";
 
 function escapeHtml(v) {
   return String(v ?? "")
@@ -9,16 +10,44 @@ function escapeHtml(v) {
     .replaceAll("'", "&#039;");
 }
 
-function renderClienteOptionsCentral() {
-  const clientes = appState.clientes?.items ?? [];
-  const sel = appState.centralOperaciones?.filterClienteId ?? "";
-  return [
-    `<option value="">Todos los clientes</option>`,
-    ...clientes.map(
-      (c) =>
-        `<option value="${escapeHtml(c.id)}" ${c.id === sel ? "selected" : ""}>${escapeHtml(c.nombre)}</option>`
-    )
-  ].join("");
+const ESTADOS = ["Pendiente", "Cumplido", "Cumplido Tardio", "Vencido"];
+const MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function syncCentralFilterDetailsActive() {
+  const st = appState.centralOperaciones;
+  const pairs = [
+    ["co-filter-cliente", st.clienteFilter],
+    ["co-filter-obligacion", st.obligacionFilter],
+    ["co-filter-mes-vto", st.mesVtoFilter],
+    ["co-filter-estado", st.estadoFilter],
+    ["co-filter-usuario", st.usuarioFilter]
+  ];
+  for (const [id, sel] of pairs) {
+    const details = document.querySelector(`details.op-mfilter[data-filter-id="${id}"]`);
+    if (details) details.classList.toggle("is-active", (sel ?? []).length > 0);
+  }
+}
+
+/** Mismas opciones y estilo que Obligaciones (multi-filtro + badges). */
+export function paintCentralOperacionesFilters(items) {
+  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "es"));
+  const st = appState.centralOperaciones;
+
+  buildMultiFilterOpts("co-filter-cliente", uniq(items.map((r) => r.clienteNombre)), st.clienteFilter ?? []);
+  buildMultiFilterOpts("co-filter-obligacion", uniq(items.map((r) => r.obligacion)), st.obligacionFilter ?? []);
+
+  const meses = uniq(items.map((r) => r.vencimiento?.slice(0, 7)).filter(Boolean)).sort();
+  buildMultiFilterOpts("co-filter-mes-vto", meses, st.mesVtoFilter ?? [], (ym) => {
+    const [y, m] = ym.split("-");
+    return `${MESES_ES[Number(m) - 1]}-${y}`;
+  });
+
+  buildMultiFilterOpts("co-filter-estado", ESTADOS, st.estadoFilter ?? []);
+  buildMultiFilterOpts("co-filter-usuario", uniq(items.map((r) => r.responsable)), st.usuarioFilter ?? []);
+  syncCentralFilterDetailsActive();
+  document.querySelectorAll("#co-filters-row .op-mfilter-search").forEach((el) => {
+    el.value = "";
+  });
 }
 
 export function renderCentralOperacionesView() {
@@ -58,16 +87,26 @@ export function renderCentralOperacionesView() {
 
       <div class="co-panel">
         <h2 class="co-panel-title">Filtros del listado</h2>
-        <div class="co-filters">
-          <select id="co-filter-cliente" class="op-select">${renderClienteOptionsCentral()}</select>
-          <select id="co-filter-tipo" class="op-select">
-            <option value="todos" ${f.filterTipo === "todos" ? "selected" : ""}>Tipo: todos</option>
-            <option value="obligacion" ${f.filterTipo === "obligacion" ? "selected" : ""}>Solo obligaciones</option>
-            <option value="tarea" ${f.filterTipo === "tarea" ? "selected" : ""}>Solo tareas</option>
-          </select>
-          <input id="co-filter-venc-month" class="op-select" type="month" value="${escapeHtml(f.filterVencMonth ?? "")}" title="Mes de vencimiento" />
-          <input id="co-filter-oblig" type="search" class="req-search" placeholder="Contiene obligación/tarea…" value="${escapeHtml(f.filterObligacionContains ?? "")}" />
-          <input id="co-filter-text" type="search" class="req-search" placeholder="Buscar texto libre…" value="${escapeHtml(f.filterText ?? "")}" />
+        <p class="co-panel-desc co-filters-hint">
+          Mismos criterios que <strong>Obligaciones</strong>: cliente, obligación/tarea, mes de vencimiento, estado, usuario y búsqueda libre.
+        </p>
+        <div class="op-toolbar co-op-toolbar">
+          <div class="op-toolbar-top">
+            <div class="op-filters-row" id="co-filters-row">
+              ${renderMultiFilter("co-filter-cliente", "Cliente")}
+              ${renderMultiFilter("co-filter-obligacion", "Obligación / Tarea")}
+              ${renderMultiFilter("co-filter-mes-vto", "Mes Vto.")}
+              ${renderMultiFilter("co-filter-estado", "Estado")}
+              ${renderMultiFilter("co-filter-usuario", "Usuario")}
+            </div>
+          </div>
+          <input
+            id="co-search"
+            class="req-search op-search"
+            type="search"
+            placeholder="Buscar..."
+            value="${escapeHtml(f.search ?? "")}"
+          />
         </div>
         <div class="co-actions">
           <button type="button" id="co-btn-clear-filters" class="btn-secondary">Limpiar filtros</button>

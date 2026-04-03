@@ -149,7 +149,7 @@ function isTareaLabel(obligacion) {
   return esNombreTareaPlanIn(obligacion);
 }
 
-function renderMultiFilter(id, label) {
+export function renderMultiFilter(id, label) {
   return `
     <details class="op-mfilter" data-filter-id="${id}">
       <summary class="op-mfilter-btn">
@@ -683,7 +683,7 @@ function encCheckboxValue(v) {
   return encodeURIComponent(String(v));
 }
 
-function buildMultiFilterOpts(id, values, selected, labelFn) {
+export function buildMultiFilterOpts(id, values, selected, labelFn) {
   const optsEl = document.getElementById(`${id}-opts`);
   const countEl = document.getElementById(`${id}-count`);
   if (!optsEl) return;

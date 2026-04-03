@@ -45,13 +45,14 @@ export const appState = {
     vistaMode: "todos",
     vistaRefDate: null
   },
-  /** Filtros de la Central de operaciones (solo superadmin). */
+  /** Filtros de la Central de operaciones (solo superadmin). Misma lógica que Obligaciones. */
   centralOperaciones: {
-    filterClienteId: "",
-    filterTipo: "todos",
-    filterText: "",
-    filterVencMonth: "",
-    filterObligacionContains: ""
+    search: "",
+    clienteFilter: [],
+    obligacionFilter: [],
+    mesVtoFilter: [],
+    estadoFilter: [],
+    usuarioFilter: []
   },
   /** Reporte de tiempos insumidos (superadmin / admin / colaborador solo los propios). */
   reporteTiempos: {

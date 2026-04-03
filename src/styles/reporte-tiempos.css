@@ -354,12 +354,21 @@ details.rt-dim-pill[open] .rt-dim-pill-arrow {
 .rt-th-col {
   text-align: right;
   min-width: 90px;
+  padding-left: 12px;
+  padding-right: 14px;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
 }
 
 .rt-th-total {
   text-align: right;
   color: var(--accent);
   min-width: 90px;
+  padding-left: 12px;
+  padding-right: 14px;
+  font-variant-numeric: tabular-nums;
+  border-left: 1px solid rgba(26, 26, 46, 0.08);
+  box-sizing: border-box;
 }
 
 /* Celdas */
@@ -392,6 +401,9 @@ details.rt-dim-pill[open] .rt-dim-pill-arrow {
   font-variant-numeric: tabular-nums;
   color: var(--ink-light);
   white-space: nowrap;
+  padding-left: 12px;
+  padding-right: 14px;
+  box-sizing: border-box;
 }
 
 .rt-td-zero {
@@ -405,6 +417,10 @@ details.rt-dim-pill[open] .rt-dim-pill-arrow {
   color: var(--ink);
   white-space: nowrap;
   border-left: 1px solid rgba(26, 26, 46, 0.08);
+  padding-left: 12px;
+  padding-right: 14px;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
 }
 
 /* Hover */
@@ -420,6 +436,7 @@ details.rt-dim-pill[open] .rt-dim-pill-arrow {
   border-top: 2px solid rgba(26, 26, 46, 0.1);
   border-bottom: none;
   background: rgba(26, 26, 46, 0.025);
+  box-sizing: border-box;
 }
 
 .rt-td-foot {
@@ -430,6 +447,18 @@ details.rt-dim-pill[open] .rt-dim-pill-arrow {
   color: var(--accent);
   font-size: 14px;
   border-left: 1px solid rgba(26, 26, 46, 0.08);
+  text-align: right;
+  padding-left: 12px;
+  padding-right: 14px;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+.rt-pivot-table tfoot td.rt-td-foot.rt-td-num {
+  text-align: right;
+  padding-left: 12px;
+  padding-right: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
