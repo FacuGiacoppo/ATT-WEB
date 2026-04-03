@@ -5,6 +5,7 @@ import { bindUsersEvents } from "../modules/users/users.controller.js";
 import { bindClientesEvents } from "../modules/clientes/clientes.controller.js";
 import { bindOperacionesEvents } from "../modules/operaciones/operaciones.controller.js";
 import { bindCentralOperacionesEvents } from "../modules/central-operaciones/central-operaciones.controller.js";
+import { bindBandejaCumplimientosEvents } from "../modules/bandeja-cumplimientos/bandeja-cumplimientos.controller.js";
 import { appState, resetSession } from "./state.js";
 import { logout } from "../modules/auth/auth.service.js";
 
@@ -49,6 +50,7 @@ function bindGlobalEvents() {
   bindClientesEvents();
   bindOperacionesEvents();
   bindCentralOperacionesEvents();
+  bindBandejaCumplimientosEvents();
 }
 
 export async function setAuthenticatedUser(user) {

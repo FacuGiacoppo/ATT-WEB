@@ -12,9 +12,19 @@ import {
   paintOperacionesFilters
 } from "../modules/operaciones/operaciones.view.js";
 import { loadOperaciones, paintOperacionesTable } from "../modules/operaciones/operaciones.controller.js";
+import {
+  loadBandejaCumplimientos,
+  paintBandejaTable
+} from "../modules/bandeja-cumplimientos/bandeja-cumplimientos.controller.js";
+import { renderBandejaCumplimientosView } from "../modules/bandeja-cumplimientos/bandeja-cumplimientos.view.js";
 import { renderEstadoResultadosView } from "../modules/estado-resultados/estado-resultados.view.js";
 import { initEstadoResultadosPage } from "../modules/estado-resultados/estado-resultados.controller.js";
-import { canAccessCentralOperaciones, canAccessEstadoResultados, canUploadEerr } from "../utils/permissions.js";
+import {
+  canAccessCentralOperaciones,
+  canAccessEstadoResultados,
+  canSeeModule,
+  canUploadEerr
+} from "../utils/permissions.js";
 import { renderCentralOperacionesView } from "../modules/central-operaciones/central-operaciones.view.js";
 import {
   initCentralOperacionesPage,
@@ -69,6 +79,19 @@ export async function renderRoute() {
       content.innerHTML = renderOperacionesView();
       paintOperacionesFilters(appState.operaciones.items ?? []);
       paintOperacionesTable();
+      break;
+
+    case "bandeja-cumplimientos":
+      if (!canSeeModule(appState.session.user, "operaciones")) {
+        content.innerHTML = `
+          <section class="page-section">
+            <div class="page-empty">No tenés permiso para acceder a la bandeja de salida.</div>
+          </section>`;
+        break;
+      }
+      await loadBandejaCumplimientos();
+      content.innerHTML = renderBandejaCumplimientosView();
+      paintBandejaTable();
       break;
 
     case "central-operaciones":

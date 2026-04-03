@@ -29,7 +29,7 @@ const CUMPLIMIENTOS_COL = "cumplimientos";
  * @param {string} data.asunto
  * @param {string} data.cuerpo
  * @param {string} data.cumplidoPor         nombre o email del usuario
- * @param {string} nuevoEstado              Estado a asignar a la operacion
+ * @param {string} nuevoEstado              Estado a asignar a la operacion (también se guarda en el doc. de cumplimiento como estadoOperacion)
  */
 export async function saveCumplimiento(operacionId, data, nuevoEstado) {
   // 1. Guardar registro de trazabilidad
@@ -40,6 +40,7 @@ export async function saveCumplimiento(operacionId, data, nuevoEstado) {
     obligacion:        data.obligacion     ?? "",
     periodo:           data.periodo        ?? "",
     fechaCumplimiento: data.fechaCumplimiento,
+    estadoOperacion:   nuevoEstado ?? "",
     comentarioInterno: data.comentarioInterno ?? "",
     requiereEnvio:     data.requiereEnvio  ?? false,
     destinatarios:     data.destinatarios  ?? [],

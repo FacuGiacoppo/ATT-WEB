@@ -52,6 +52,21 @@ export const appState = {
     filterText: "",
     filterVencMonth: "",
     filterObligacionContains: ""
+  },
+  /** Registro de cumplimientos / bandeja de salida (misma visibilidad que operaciones). */
+  bandejaCumplimientos: {
+    items: [],
+    loadError: null,
+    search: "",
+    estadoFilter: [],
+    clienteFilter: [],
+    obligacionFilter: [],
+    mesCumplFilter: [],
+    usuarioFilter: [],
+    vistaMode: "todos",
+    vistaRefDate: null,
+    sortKey: "createdAt",
+    sortDir: "desc"
   }
 };
 

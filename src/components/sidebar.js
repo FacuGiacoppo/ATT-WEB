@@ -22,6 +22,7 @@ export function renderSidebar() {
           </div>` : ""}
         ${canSeeModule(user, "clientes") ? `<button class="sidebar-link" data-route="clientes">Clientes</button>` : ""}
         ${canSeeModule(user, "operaciones") ? `<button class="sidebar-link" data-route="operaciones">Obligaciones</button>` : ""}
+        ${canSeeModule(user, "operaciones") ? `<button class="sidebar-link" data-route="bandeja-cumplimientos">Bandeja de salida</button>` : ""}
         ${canAccessCentralOperaciones(user) ? `<button class="sidebar-link" data-route="central-operaciones">Central de operaciones</button>` : ""}
         ${canSeeModule(user, "requerimientos") ? `<button class="sidebar-link" data-route="requerimientos">Requerimientos</button>` : ""}
         ${canAccessEstadoResultados(user) ? `<button class="sidebar-link" data-route="estado-resultados">Estado Resultados</button>` : ""}

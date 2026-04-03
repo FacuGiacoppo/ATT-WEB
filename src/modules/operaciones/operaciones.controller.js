@@ -485,8 +485,8 @@ export function bindOperacionesEvents() {
         });
         updateFilterBadge(filterId, []);
         paintOperacionesTable();
+        return;
       }
-      return;
     }
 
     const mfilterVisible = event.target.closest("[data-mfilter-visible]");
@@ -512,8 +512,8 @@ export function bindOperacionesEvents() {
         setState(`operaciones.${stateKey}`, selected);
         updateFilterBadge(filterId, selected);
         paintOperacionesTable();
+        return;
       }
-      return;
     }
 
     // Close filter panels when clicking outside
@@ -620,8 +620,8 @@ export function bindOperacionesEvents() {
         setState(`operaciones.${stateKey}`, selected);
         updateFilterBadge(filterId, selected);
         paintOperacionesTable();
+        return;
       }
-      return;
     }
 
     if (event.target.id === "op-periodo" || event.target.id === "op-cliente-id") {
@@ -646,11 +646,12 @@ export function bindOperacionesEvents() {
       const filterId = msearch.dataset.mfilterSearch;
       const q = (msearch.value || "").trim().toLowerCase();
       const optsEl = document.getElementById(`${filterId}-opts`);
-      if (!optsEl) return;
-      optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
-        const t = (row.querySelector("span")?.textContent || "").toLowerCase();
-        row.classList.toggle("op-mfilter-opt--hidden", Boolean(q) && !t.includes(q));
-      });
+      if (optsEl) {
+        optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
+          const t = (row.querySelector("span")?.textContent || "").toLowerCase();
+          row.classList.toggle("op-mfilter-opt--hidden", Boolean(q) && !t.includes(q));
+        });
+      }
       return;
     }
     if (event.target.id === "op-obligacion") {
