@@ -2,6 +2,22 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <!-- GitHub Pages (*.github.io/nombre-repo/): el <base> evita que los .js resuelvan mal y devuelvan HTML (error Unexpected token '<'). -->
+    <script>
+      (function () {
+        try {
+          if (!/\.github\.io$/i.test(location.hostname)) return;
+          var parts = location.pathname.split("/").filter(Boolean);
+          if (parts.length && /\.html?$/i.test(parts[parts.length - 1])) parts.pop();
+          var href = parts.length ? "/" + parts.join("/") + "/" : "/";
+          var b = document.createElement("base");
+          b.href = href;
+          var ch = document.querySelector("meta[charset]");
+          if (ch) ch.after(b);
+          else document.head.prepend(b);
+        } catch (e) {}
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
@@ -33,6 +49,6 @@
     <!-- MSAL (Microsoft login) para enviar emails por Graph -->
     <script defer src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
 
-    <script type="module" src="./src/main.js?v=20260402-10"></script>
+    <script type="module" src="./src/main.js?v=20260402-11"></script>
   </body>
 </html>

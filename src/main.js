@@ -6,7 +6,9 @@ function showModuleLoadError(err) {
   section.className = "page-section boot-fatal";
   section.innerHTML =
     "<h1 class=\"boot-fatal-title\">No se pudieron cargar los módulos</h1>" +
-    "<p class=\"boot-fatal-hint\">Serví la carpeta con <code>npm run start</code> y abrí <strong>http://localhost:3000</strong> (no uses <code>file://</code>). En Safari: menú <strong>Desarrollo → Consola JavaScript</strong>.</p>";
+    "<p class=\"boot-fatal-hint\">Local: <code>npm run start</code> y <strong>http://localhost:3000</strong> (no <code>file://</code>). " +
+    "GitHub Pages: activá Pages en la rama correcta y abrí la URL del repo (<code>…github.io/nombre-repo/</code>). " +
+    "Si el error dice <code>Unexpected token '&lt;'</code>, suele ser una ruta mal resuelta: recargá con la barra final o revisá la consola (F12) qué URL de .js falla.</p>";
   const pre = document.createElement("pre");
   pre.className = "boot-fatal-pre";
   pre.textContent = err?.stack || err?.message || String(err);
