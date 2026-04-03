@@ -30,6 +30,11 @@ import {
   initCentralOperacionesPage,
   paintCentralOperacionesTable
 } from "../modules/central-operaciones/central-operaciones.controller.js";
+import { renderReporteTiemposView } from "../modules/reporte-tiempos/reporte-tiempos.view.js";
+import {
+  loadReporteTiempos,
+  initReporteTiemposPage
+} from "../modules/reporte-tiempos/reporte-tiempos.controller.js";
 
 export async function navigate(route) {
   appState.ui.activeRoute = route;
@@ -112,6 +117,19 @@ export async function renderRoute() {
       await initCentralOperacionesPage();
       content.innerHTML = renderCentralOperacionesView();
       paintCentralOperacionesTable();
+      break;
+
+    case "reporte-tiempos":
+      if (!canSeeModule(appState.session.user, "tiempos")) {
+        content.innerHTML = `
+          <section class="page-section">
+            <div class="page-empty">No tenés permiso para acceder al Reporte de tiempos.</div>
+          </section>`;
+        break;
+      }
+      await loadReporteTiempos();
+      content.innerHTML = renderReporteTiemposView();
+      initReporteTiemposPage();
       break;
 
     case "users":

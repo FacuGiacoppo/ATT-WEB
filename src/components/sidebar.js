@@ -26,11 +26,7 @@ export function renderSidebar() {
         ${canAccessCentralOperaciones(user) ? `<button class="sidebar-link" data-route="central-operaciones">Central de operaciones</button>` : ""}
         ${canSeeModule(user, "requerimientos") ? `<button class="sidebar-link" data-route="requerimientos">Requerimientos</button>` : ""}
         ${canAccessEstadoResultados(user) ? `<button class="sidebar-link" data-route="estado-resultados">Estado Resultados</button>` : ""}
-        ${canSeeModule(user, "tiempos") ? `
-          <div class="sidebar-nav-item">
-            <span class="sidebar-soon">Próximamente</span>
-            <button class="sidebar-link sidebar-link--soon" data-route="tiempos" disabled>Reporte de tiempos</button>
-          </div>` : ""}
+        ${canSeeModule(user, "tiempos") ? `<button class="sidebar-link" data-route="reporte-tiempos">Reporte de tiempos</button>` : ""}
         ${canSeeModule(user, "users") ? `<button class="sidebar-link" data-route="users">Usuarios</button>` : ""}
       </nav>
     </aside>
