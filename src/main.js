@@ -22,7 +22,7 @@ function showModuleLoadError(err) {
     "<h1 class=\"boot-fatal-title\">No se pudieron cargar los módulos</h1>" +
     "<p class=\"boot-fatal-hint\">Local: <code>npm run start</code> y <strong>http://localhost:3000</strong> (no <code>file://</code>). " +
     "GitHub Pages: la carpeta <code>src/</code> tiene que estar en la rama que publica Pages. " +
-    "Si ves <code>Unexpected token '&lt;'</code>, en F12 → Red verificá que <code>bootstrap.js</code> sea JS (200), no HTML.</p>";
+    "Si ves <code>Unexpected token '&lt;'</code>, en F12 → Red buscá el primer <code>.js</code> con tipo <strong>documento HTML</strong> (suele ser 404); la URL de abajo es solo el punto de entrada <code>bootstrap.js</code>.</p>";
   const pre = document.createElement("pre");
   pre.className = "boot-fatal-pre";
   const tried = bootstrapModuleUrl();
