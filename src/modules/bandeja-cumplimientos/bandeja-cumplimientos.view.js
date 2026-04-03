@@ -110,8 +110,8 @@ function renderMultiFilter(id, label) {
         <div class="op-mfilter-pop-head">
           <input type="search" class="op-mfilter-search" placeholder="Buscar…" autocomplete="off" data-mfilter-search="${id}" />
           <div class="op-mfilter-actions">
-            <button type="button" class="op-mfilter-action" data-mfilter-clear="${id}">Mostrar todos</button>
-            <button type="button" class="op-mfilter-action op-mfilter-action--secondary" data-mfilter-visible="${id}">Marcar visibles</button>
+            <button type="button" class="op-mfilter-action" data-mfilter-all="${id}">Marcar todos</button>
+            <button type="button" class="op-mfilter-action op-mfilter-action--secondary" data-mfilter-clear="${id}">Ninguno</button>
           </div>
         </div>
         <div class="op-mfilter-opts" id="${id}-opts"></div>

@@ -473,32 +473,15 @@ export function bindOperacionesEvents() {
       return;
     }
 
-    const mfilterClear = event.target.closest("[data-mfilter-clear]");
-    if (mfilterClear) {
+    const mfilterAll = event.target.closest("[data-mfilter-all]");
+    if (mfilterAll && mfilterAll.closest("#op-filters-row")) {
       event.preventDefault();
-      const filterId = mfilterClear.dataset.mfilterClear;
-      const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
-      if (stateKey) {
-        setState(`operaciones.${stateKey}`, []);
-        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
-          c.checked = false;
-        });
-        updateFilterBadge(filterId, []);
-        paintOperacionesTable();
-        return;
-      }
-    }
-
-    const mfilterVisible = event.target.closest("[data-mfilter-visible]");
-    if (mfilterVisible) {
-      event.preventDefault();
-      const filterId = mfilterVisible.dataset.mfilterVisible;
+      const filterId = mfilterAll.dataset.mfilterAll;
       const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
       const optsEl = document.getElementById(`${filterId}-opts`);
       if (stateKey && optsEl) {
         const selected = [];
         optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
-          if (row.classList.contains("op-mfilter-opt--hidden")) return;
           const inp = row.querySelector("input[type='checkbox']");
           if (inp) {
             inp.checked = true;
@@ -511,6 +494,22 @@ export function bindOperacionesEvents() {
         });
         setState(`operaciones.${stateKey}`, selected);
         updateFilterBadge(filterId, selected);
+        paintOperacionesTable();
+        return;
+      }
+    }
+
+    const mfilterClear = event.target.closest("[data-mfilter-clear]");
+    if (mfilterClear && mfilterClear.closest("#op-filters-row")) {
+      event.preventDefault();
+      const filterId = mfilterClear.dataset.mfilterClear;
+      const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
+      if (stateKey) {
+        setState(`operaciones.${stateKey}`, []);
+        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
+          c.checked = false;
+        });
+        updateFilterBadge(filterId, []);
         paintOperacionesTable();
         return;
       }
