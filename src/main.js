@@ -1,16 +1,15 @@
-/**
- * Misma lógica que el <base> del index: prefijo del sitio (ej. /ATT-WEB/).
- * En GitHub Pages import.meta.url a veces no coincide; location sí.
- */
-function sitePathPrefix() {
+/** Definido en index.html junto al <base> (origen + /repo/). */
+function siteBaseForModules() {
+  const b = typeof window !== "undefined" ? window.__ATT_SITE_BASE__ : null;
+  if (b) return b;
   const parts = location.pathname.split("/").filter(Boolean);
   if (parts.length && /\.html?$/i.test(parts[parts.length - 1])) parts.pop();
-  return parts.length ? `/${parts.join("/")}/` : "/";
+  const href = parts.length ? `/${parts.join("/")}/` : "/";
+  return `${location.origin}${href}`;
 }
 
 function bootstrapModuleUrl() {
-  const base = `${location.origin}${sitePathPrefix()}`;
-  return new URL("src/app/bootstrap.js", base).href;
+  return new URL("src/app/bootstrap.js", siteBaseForModules()).href;
 }
 
 function showModuleLoadError(err) {

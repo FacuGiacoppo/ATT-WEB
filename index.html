@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <!-- Subpath (GitHub Pages /repo/, dominio propio, etc.): <base> para CSS y el primer <script module>. -->
+    <!-- Base del sitio + URL absoluta para módulos (GitHub Pages /nombre-repo/). -->
     <script>
       (function () {
         try {
@@ -10,6 +10,7 @@
           var parts = location.pathname.split("/").filter(Boolean);
           if (parts.length && /\.html?$/i.test(parts[parts.length - 1])) parts.pop();
           var href = parts.length ? "/" + parts.join("/") + "/" : "/";
+          window.__ATT_SITE_BASE__ = location.origin + href;
           var b = document.createElement("base");
           b.href = href;
           var ch = document.querySelector("meta[charset]");
@@ -49,6 +50,29 @@
     <!-- MSAL (Microsoft login) para enviar emails por Graph -->
     <script defer src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
 
-    <script type="module" src="./src/main.js?v=20260402-13"></script>
+    <!-- URL absoluta: en Pages ./src/main.js a veces devolvía HTML (Unexpected token '<'). -->
+    <script>
+      (function () {
+        var v = "20260402-14";
+        var base = window.__ATT_SITE_BASE__;
+        var src = base
+          ? new URL("src/main.js?v=" + v, base).href
+          : "./src/main.js?v=" + v;
+        var sc = document.createElement("script");
+        sc.type = "module";
+        sc.src = src;
+        sc.onerror = function () {
+          var app = document.getElementById("app");
+          if (!app) return;
+          app.innerHTML =
+            '<section class="page-section boot-fatal"><h1 class="boot-fatal-title">No se pudo cargar main.js</h1>' +
+            "<p class=\"boot-fatal-hint\">Probá abrir esta URL en una pestaña nueva (debería verse código JavaScript, no HTML):</p>" +
+            "<pre class=\"boot-fatal-pre\">" +
+            String(src).replace(/</g, "&lt;") +
+            "</pre></section>";
+        };
+        document.body.appendChild(sc);
+      })();
+    </script>
   </body>
 </html>
