@@ -7,11 +7,11 @@ import { appState } from "./state.js";
 import { loadRequirements } from "../modules/requerimientos/req.controller.js";
 import { loadUsers } from "../modules/users/users.controller.js";
 import { loadClientes } from "../modules/clientes/clientes.controller.js";
-import { renderOperacionesView } from "../modules/operaciones/operaciones.view.js";
 import {
-  loadOperaciones,
-  paintOperacionesTable
-} from "../modules/operaciones/operaciones.controller.js";
+  renderOperacionesView,
+  paintOperacionesFilters
+} from "../modules/operaciones/operaciones.view.js";
+import { loadOperaciones, paintOperacionesTable } from "../modules/operaciones/operaciones.controller.js";
 import { renderEstadoResultadosView } from "../modules/estado-resultados/estado-resultados.view.js";
 import { initEstadoResultadosPage } from "../modules/estado-resultados/estado-resultados.controller.js";
 import { canAccessCentralOperaciones, canAccessEstadoResultados, canUploadEerr } from "../utils/permissions.js";
@@ -67,6 +67,7 @@ export async function renderRoute() {
         appState.clientes.items.length === 0 ? loadClientes() : Promise.resolve()
       ]);
       content.innerHTML = renderOperacionesView();
+      paintOperacionesFilters(appState.operaciones.items ?? []);
       paintOperacionesTable();
       break;
 

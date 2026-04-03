@@ -187,7 +187,9 @@ export async function loadOperaciones() {
   setOperacionesLoadError(null);
   try {
     appState.operaciones.items = await fetchOperaciones();
-    paintOperacionesFilters(appState.operaciones.items);
+    if (document.getElementById("op-filter-cliente-opts")) {
+      paintOperacionesFilters(appState.operaciones.items);
+    }
   } catch (e) {
     console.error("loadOperaciones:", e?.code, e?.message, e);
     appState.operaciones.items = [];
@@ -471,6 +473,49 @@ export function bindOperacionesEvents() {
       return;
     }
 
+    const mfilterClear = event.target.closest("[data-mfilter-clear]");
+    if (mfilterClear) {
+      event.preventDefault();
+      const filterId = mfilterClear.dataset.mfilterClear;
+      const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
+      if (stateKey) {
+        setState(`operaciones.${stateKey}`, []);
+        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
+          c.checked = false;
+        });
+        updateFilterBadge(filterId, []);
+        paintOperacionesTable();
+      }
+      return;
+    }
+
+    const mfilterVisible = event.target.closest("[data-mfilter-visible]");
+    if (mfilterVisible) {
+      event.preventDefault();
+      const filterId = mfilterVisible.dataset.mfilterVisible;
+      const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
+      const optsEl = document.getElementById(`${filterId}-opts`);
+      if (stateKey && optsEl) {
+        const selected = [];
+        optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
+          if (row.classList.contains("op-mfilter-opt--hidden")) return;
+          const inp = row.querySelector("input[type='checkbox']");
+          if (inp) {
+            inp.checked = true;
+            try {
+              selected.push(decodeURIComponent(inp.value));
+            } catch {
+              selected.push(inp.value);
+            }
+          }
+        });
+        setState(`operaciones.${stateKey}`, selected);
+        updateFilterBadge(filterId, selected);
+        paintOperacionesTable();
+      }
+      return;
+    }
+
     // Close filter panels when clicking outside
     if (!event.target.closest(".op-mfilter")) {
       closeAllFilterPanels();
@@ -565,7 +610,13 @@ export function bindOperacionesEvents() {
       const filterId = panel?.id?.replace("-panel", "");
       const stateKey = filterId ? FILTER_ID_TO_STATE_KEY[filterId] : null;
       if (stateKey) {
-        const selected = [...document.querySelectorAll(`input[name="${filterId}"]:checked`)].map((el) => el.value);
+        const selected = [...document.querySelectorAll(`input[name="${filterId}"]:checked`)].map((el) => {
+          try {
+            return decodeURIComponent(el.value);
+          } catch {
+            return el.value;
+          }
+        });
         setState(`operaciones.${stateKey}`, selected);
         updateFilterBadge(filterId, selected);
         paintOperacionesTable();
@@ -589,6 +640,18 @@ export function bindOperacionesEvents() {
     if (event.target.id === "op-search") {
       setState("operaciones.search", event.target.value);
       paintOperacionesTable();
+    }
+    const msearch = event.target.closest?.(".op-mfilter-search");
+    if (msearch && msearch.dataset.mfilterSearch) {
+      const filterId = msearch.dataset.mfilterSearch;
+      const q = (msearch.value || "").trim().toLowerCase();
+      const optsEl = document.getElementById(`${filterId}-opts`);
+      if (!optsEl) return;
+      optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
+        const t = (row.querySelector("span")?.textContent || "").toLowerCase();
+        row.classList.toggle("op-mfilter-opt--hidden", Boolean(q) && !t.includes(q));
+      });
+      return;
     }
     if (event.target.id === "op-obligacion") {
       if (document.getElementById("op-tipo")?.value !== "tarea") autoCalcVencimiento();

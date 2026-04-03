@@ -157,7 +157,14 @@ function renderMultiFilter(id, label) {
         <span class="op-mfilter-count is-hidden" id="${id}-count"></span>
         <span class="op-mfilter-arrow">▾</span>
       </summary>
-      <div class="op-mfilter-panel" id="${id}-panel">
+      <div class="op-mfilter-panel" id="${id}-panel" tabindex="-1">
+        <div class="op-mfilter-pop-head">
+          <input type="search" class="op-mfilter-search" placeholder="Buscar…" autocomplete="off" data-mfilter-search="${id}" />
+          <div class="op-mfilter-actions">
+            <button type="button" class="op-mfilter-action" data-mfilter-clear="${id}">Mostrar todos</button>
+            <button type="button" class="op-mfilter-action op-mfilter-action--secondary" data-mfilter-visible="${id}">Marcar visibles</button>
+          </div>
+        </div>
         <div class="op-mfilter-opts" id="${id}-opts"></div>
       </div>
     </details>
@@ -672,15 +679,21 @@ export function computeOperacionKpis(items) {
   return { pendientes, prox7, vencidas, cerradas, total: items.length };
 }
 
+function encCheckboxValue(v) {
+  return encodeURIComponent(String(v));
+}
+
 function buildMultiFilterOpts(id, values, selected, labelFn) {
   const optsEl = document.getElementById(`${id}-opts`);
   const countEl = document.getElementById(`${id}-count`);
   if (!optsEl) return;
+  const selSet = new Set(selected.map((s) => String(s)));
   optsEl.innerHTML = values.map((v) => {
     const lbl = labelFn ? labelFn(v) : v;
-    const checked = selected.includes(v) ? " checked" : "";
+    const checked = selSet.has(String(v)) ? " checked" : "";
+    const enc = encCheckboxValue(v);
     return `<label class="op-mfilter-opt">
-      <input type="checkbox" name="${id}" value="${escapeHtml(v)}"${checked} />
+      <input type="checkbox" name="${id}" value="${enc}"${checked} />
       <span>${escapeHtml(lbl)}</span>
     </label>`;
   }).join("");
@@ -688,6 +701,21 @@ function buildMultiFilterOpts(id, values, selected, labelFn) {
     const hasActive = selected.length > 0;
     countEl.classList.toggle("is-hidden", !hasActive);
     countEl.textContent = hasActive ? String(selected.length) : "";
+  }
+}
+
+function syncMultiFilterDetailsActive() {
+  const st = appState.operaciones;
+  const pairs = [
+    ["op-filter-cliente", st.clienteFilter],
+    ["op-filter-obligacion", st.obligacionFilter],
+    ["op-filter-mes-vto", st.mesVtoFilter],
+    ["op-filter-estado", st.estadoFilter],
+    ["op-filter-usuario", st.usuarioFilter]
+  ];
+  for (const [id, sel] of pairs) {
+    const details = document.querySelector(`details.op-mfilter[data-filter-id="${id}"]`);
+    if (details) details.classList.toggle("is-active", (sel ?? []).length > 0);
   }
 }
 
@@ -706,6 +734,10 @@ export function paintOperacionesFilters(items) {
 
   buildMultiFilterOpts("op-filter-estado", ESTADOS, st.estadoFilter ?? []);
   buildMultiFilterOpts("op-filter-usuario", uniq(items.map((r) => r.responsable)), st.usuarioFilter ?? []);
+  syncMultiFilterDetailsActive();
+  document.querySelectorAll(".op-mfilter-search").forEach((el) => {
+    el.value = "";
+  });
 }
 
 export function filterAndSortOperaciones(items, state) {

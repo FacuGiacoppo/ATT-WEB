@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="./src/styles/layout.css?v=20260330-13" />
     <link rel="stylesheet" href="./src/styles/requerimientos.css?v=20260330-13" />
     <link rel="stylesheet" href="./src/styles/clientes.css?v=20260330-13" />
-    <link rel="stylesheet" href="./src/styles/operaciones.css?v=20260330-13" />
+    <link rel="stylesheet" href="./src/styles/operaciones.css?v=20260402-9" />
     <link rel="stylesheet" href="./src/styles/estado-resultados.css?v=20260402-7" />
   </head>
   <body>
@@ -30,6 +30,8 @@
     <!-- async: no bloquean el arranque de la app; ExcelJS/SheetJS se usan al importar/descargar plantilla -->
     <script async src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script async src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <!-- MSAL (Microsoft login) para enviar emails por Graph -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
 
     <script type="module" src="./src/main.js?v=20260402-9"></script>
   </body>
