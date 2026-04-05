@@ -1,4 +1,5 @@
 import { renderConsultasDfeView } from "./consultas-dfe.view.js";
+import { explainDfeFetchFailure } from "../../config/dfe-api.js";
 import { apiPostComunicaciones, apiPostComunicacionDetalle } from "./dfe.service.js";
 
 export { renderConsultasDfeView };
@@ -174,10 +175,7 @@ async function runConsultar(extra) {
     else paintTable([], payload.cuitRepresentada);
   } catch (e) {
     console.error("dfe consultar:", e);
-    setError(
-      "No se pudo contactar a la API DFE. ¿Está corriendo el servidor en " +
-        "(por defecto) http://127.0.0.1:5050 ? Podés definir window.__ATT_DFE_API_BASE__ en index.html."
-    );
+    setError(explainDfeFetchFailure());
     showEl(wrap, false);
   } finally {
     setLoading(false);
@@ -309,7 +307,7 @@ async function openDetail(idComunicacion, cuitFromRow) {
   } catch (e) {
     console.error("dfe detalle:", e);
     closeDetailModal();
-    setError("No se pudo cargar el detalle. Verificá la API DFE y la red.");
+    setError(explainDfeFetchFailure());
   }
 }
 

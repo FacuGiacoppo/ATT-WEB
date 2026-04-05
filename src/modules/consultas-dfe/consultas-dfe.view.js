@@ -10,6 +10,8 @@ export function renderConsultasDfeView() {
           <p class="page-subtitle">
             Consultá comunicaciones de la Ventanilla Electrónica (e-Ventanilla) para un CUIT representado.
             Los certificados y el acceso a AFIP se resuelven solo en el servidor; acá solo ves resultados.
+            Si abrís el sitio en HTTPS (por ejemplo GitHub Pages), la API tiene que estar en una URL HTTPS pública;
+            <code class="dfe-inline-code">127.0.0.1</code> solo funciona cuando la web y la API corren en tu PC.
           </p>
         </div>
       </header>
