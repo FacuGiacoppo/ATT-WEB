@@ -20,6 +20,10 @@ import { renderBandejaCumplimientosView } from "../modules/bandeja-cumplimientos
 import { renderEstadoResultadosView } from "../modules/estado-resultados/estado-resultados.view.js";
 import { initEstadoResultadosPage } from "../modules/estado-resultados/estado-resultados.controller.js";
 import {
+  renderConsultasDfeView,
+  initConsultasDfePage
+} from "../modules/consultas-dfe/consultas-dfe.controller.js";
+import {
   canAccessCentralOperaciones,
   canAccessEstadoResultados,
   canSeeModule,
@@ -163,6 +167,18 @@ export async function renderRoute() {
       }
       content.innerHTML = renderEstadoResultadosView(canUploadEerr(appState.session.user));
       initEstadoResultadosPage(appState.session.user);
+      break;
+
+    case "consultas-dfe":
+      if (!canSeeModule(appState.session.user, "dfe")) {
+        content.innerHTML = `
+          <section class="page-section">
+            <div class="page-empty">No tenés permiso para acceder a Consultas DFE.</div>
+          </section>`;
+        break;
+      }
+      content.innerHTML = renderConsultasDfeView();
+      initConsultasDfePage();
       break;
 
     default:

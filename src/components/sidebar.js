@@ -28,6 +28,7 @@ export function renderSidebar() {
           </div>` : ""}
         ${canSeeModule(user, "tiempos") ? `<button class="sidebar-link" data-route="reporte-tiempos">Reporte de tiempos</button>` : ""}
         ${canSeeModule(user, "requerimientos") ? `<button class="sidebar-link" data-route="requerimientos">Requerimientos</button>` : ""}
+        ${canSeeModule(user, "dfe") ? `<button class="sidebar-link" data-route="consultas-dfe">Consultas DFE</button>` : ""}
         ${canAccessEstadoResultados(user) ? `<button class="sidebar-link" data-route="estado-resultados">Estado Resultados</button>` : ""}
       </nav>
     </aside>

@@ -1,0 +1,142 @@
+"""
+Capa de servicio DFE: configuración, WSAA (caché), VEConsumer, errores uniformes.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+from pathlib import Path
+
+# Paquete arca_ve_connector (hermano de dfe_api/)
+_ARCA_ROOT = Path(__file__).resolve().parent.parent / "arca_ve_connector"
+if str(_ARCA_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ARCA_ROOT))
+
+from zeep.exceptions import Fault
+
+from arca_ve_connector.config import ArcaConnectorConfig
+from arca_ve_connector.veconsumer_client import VEConsumerClient
+from arca_ve_connector.wsaa_client import WSAARequestError, request_ticket
+
+from normalize import (
+    normalize_comunicacion_detalle,
+    normalize_consultar_comunicaciones_response,
+    normalize_estados_response,
+)
+
+
+class DfeServiceError(Exception):
+    def __init__(self, code: str, message: str, *, http_status: int = 502, detail: dict | None = None):
+        super().__init__(message)
+        self.code = code
+        self.http_status = http_status
+        self.detail = detail or {}
+
+
+def _digits_cuit(cuit: str) -> str:
+    return re.sub(r"\D", "", cuit or "")
+
+
+def _validate_cuit(cuit: str) -> str:
+    d = _digits_cuit(cuit)
+    if len(d) != 11:
+        raise DfeServiceError("parametros", "cuitRepresentada debe tener 11 dígitos.", http_status=400)
+    return d
+
+
+def _validate_date(s: str, name: str) -> str:
+    if not s or not re.match(r"^\d{4}-\d{2}-\d{2}$", s.strip()):
+        raise DfeServiceError("parametros", f"{name} debe ser YYYY-MM-DD.", http_status=400)
+    return s.strip()
+
+
+def _ve_client(cuit: str) -> VEConsumerClient:
+    cfg = ArcaConnectorConfig.from_env()
+    ta = request_ticket(
+        cfg.wsaa_url,
+        cfg.wsaa_service,
+        cfg.cert_path,
+        cfg.key_path,
+    )
+    return VEConsumerClient(cfg.ve_wsdl, ta, cuit)
+
+
+def consultar_estados(cuit_representada: str) -> dict:
+    cuit = _validate_cuit(cuit_representada)
+    try:
+        ve = _ve_client(cuit)
+        raw = ve.consultar_estados()
+    except WSAARequestError as e:
+        raise DfeServiceError("wsaa", str(e), http_status=502, detail={"status": e.status_code}) from e
+    except Fault as e:
+        raise DfeServiceError("soap_fault", getattr(e, "message", str(e)) or "Fault SOAP", http_status=502) from e
+    return normalize_estados_response(raw)
+
+
+def consultar_comunicaciones(
+    cuit_representada: str,
+    fecha_desde: str,
+    fecha_hasta: str,
+    pagina: int,
+    resultados_por_pagina: int,
+) -> dict:
+    cuit = _validate_cuit(cuit_representada)
+    fd = _validate_date(fecha_desde, "fechaDesde")
+    fh = _validate_date(fecha_hasta, "fechaHasta")
+    if pagina < 1:
+        raise DfeServiceError("parametros", "pagina debe ser >= 1", http_status=400)
+    if resultados_por_pagina < 1 or resultados_por_pagina > 100:
+        raise DfeServiceError("parametros", "resultadosPorPagina debe estar entre 1 y 100", http_status=400)
+
+    filter_ = {
+        "fechaDesde": fd,
+        "fechaHasta": fh,
+        "pagina": pagina,
+        "resultadosPorPagina": resultados_por_pagina,
+    }
+    try:
+        ve = _ve_client(cuit)
+        raw = ve.consultar_comunicaciones(filter_)
+    except WSAARequestError as e:
+        raise DfeServiceError("wsaa", str(e), http_status=502, detail={"status": e.status_code}) from e
+    except Fault as e:
+        raise DfeServiceError("soap_fault", getattr(e, "message", str(e)) or "Fault SOAP", http_status=502) from e
+    return normalize_consultar_comunicaciones_response(raw)
+
+
+def consumir_comunicacion(
+    cuit_representada: str,
+    id_comunicacion: int,
+    incluir_adjuntos: bool,
+) -> dict:
+    cuit = _validate_cuit(cuit_representada)
+    if id_comunicacion < 1:
+        raise DfeServiceError("parametros", "idComunicacion inválido", http_status=400)
+    include_b64 = os.environ.get("DFE_INCLUDE_ADJUNTO_BASE64", "").lower() in ("1", "true", "yes")
+    try:
+        ve = _ve_client(cuit)
+        raw = ve.consumir_comunicacion(id_comunicacion, incluir_adjuntos=incluir_adjuntos)
+    except WSAARequestError as e:
+        raise DfeServiceError("wsaa", str(e), http_status=502, detail={"status": e.status_code}) from e
+    except Fault as e:
+        raise DfeServiceError("soap_fault", getattr(e, "message", str(e)) or "Fault SOAP", http_status=502) from e
+    return normalize_comunicacion_detalle(raw, include_adjunto_base64=include_b64)
+
+
+def health_check() -> dict:
+    """Sin llamar AFIP: solo verifica que el conector sea importable y la config mínima."""
+    try:
+        ArcaConnectorConfig.from_env()
+        return {
+            "connector": "arca_ve_connector",
+            "configPresent": True,
+            "configMessage": None,
+        }
+    except ValueError as e:
+        return {
+            "connector": "arca_ve_connector",
+            "configPresent": False,
+            "configMessage": str(e),
+        }

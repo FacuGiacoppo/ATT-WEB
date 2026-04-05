@@ -21,3 +21,11 @@ npm-debug.log*
 # Archivos Excel con datos personales
 Vencimientos/*.xlsx
 Vencimientos/*.xls
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+.env
