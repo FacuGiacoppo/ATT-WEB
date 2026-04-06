@@ -15,6 +15,7 @@ from typing import Any
 
 from zeep.helpers import serialize_object
 
+import base64
 
 def to_plain(obj: Any) -> Any:
     """Convierte respuesta Zeep a estructuras JSON-serializables."""
@@ -247,7 +248,12 @@ def _normalize_adjunto(a: dict[str, Any], include_base64: bool) -> dict[str, Any
         "contentSize": a.get("contentSize"),
     }
     if include_base64 and a.get("content") is not None:
-        out["contentBase64"] = a.get("content")
+        c = a.get("content")
+        # Zeep puede devolver base64 decodificado (bytes) o string base64.
+        if isinstance(c, bytes):
+            out["contentBase64"] = base64.b64encode(c).decode("ascii")
+        else:
+            out["contentBase64"] = c
     else:
         out["contentOmitted"] = True
     return out

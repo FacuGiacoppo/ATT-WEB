@@ -303,6 +303,21 @@
   line-height: 1.6;
 }
 
+.dfe-adj-item {
+  margin: 8px 0;
+}
+
+.dfe-adj-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.dfe-adj-preview {
+  margin-top: 10px;
+}
+
 .dfe-pre-sm {
   margin: 0;
   font-size: 12px;

@@ -169,7 +169,11 @@ def consumir_comunicacion(
     cuit = _validate_cuit(cuit_representada)
     if id_comunicacion < 1:
         raise DfeServiceError("parametros", "idComunicacion inválido", http_status=400)
-    include_b64 = os.environ.get("DFE_INCLUDE_ADJUNTO_BASE64", "").lower() in ("1", "true", "yes")
+    # Para descarga, si el cliente pide incluirAdjuntos=True, incluimos contentBase64.
+    # El env DFE_INCLUDE_ADJUNTO_BASE64 queda como override para debugging.
+    include_b64 = incluir_adjuntos or (
+        os.environ.get("DFE_INCLUDE_ADJUNTO_BASE64", "").lower() in ("1", "true", "yes")
+    )
     try:
         ve = _ve_client(cuit)
         raw = ve.consumir_comunicacion(id_comunicacion, incluir_adjuntos=incluir_adjuntos)

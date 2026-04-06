@@ -295,12 +295,32 @@ function renderDetailModal(data, { incluirAdjuntos }) {
     adj.length === 0
       ? "<p class=\"dfe-muted\">Sin adjuntos en esta respuesta.</p>"
       : `<ul class="dfe-adj-list">${adj
-        .map(
-          (a) =>
-            `<li><strong>${escHtml(a.filename || "archivo")}</strong> · ${escHtml(a.md5 || "—")} · ${escHtml(
-              String(a.contentSize ?? "—")
-            )}${a.contentOmitted ? " · <span class=\"dfe-muted\">contenido omitido en API</span>" : ""}</li>`
-        )
+        .map((a, idx) => {
+          const name = a.filename || "archivo";
+          const size = String(a.contentSize ?? "—");
+          const has = Boolean(a.contentBase64) && !a.contentOmitted;
+          const isTxt = /\.txt$/i.test(name);
+          return `<li class="dfe-adj-item">
+            <div class="dfe-adj-meta">
+              <strong>${escHtml(name)}</strong>
+              <span class="dfe-muted"> · ${escHtml(a.md5 || "—")} · ${escHtml(size)}</span>
+              ${a.contentOmitted ? ' · <span class="dfe-muted">contenido omitido</span>' : ""}
+            </div>
+            <div class="dfe-adj-actions">
+              ${
+                has
+                  ? `<button type="button" class="btn-secondary dfe-btn-sm" data-dfe-download="${idx}">Descargar</button>`
+                  : ""
+              }
+              ${
+                has && isTxt
+                  ? `<button type="button" class="btn-secondary dfe-btn-sm" data-dfe-preview="${idx}">Vista previa</button>`
+                  : ""
+              }
+            </div>
+            <div class="dfe-adj-preview is-hidden" id="dfe-adj-prev-${idx}"></div>
+          </li>`;
+        })
         .join("")}</ul>`;
 
   const rawJson = JSON.stringify(data.raw ?? data, null, 2);
@@ -359,6 +379,72 @@ function renderDetailModal(data, { incluirAdjuntos }) {
   });
 
   document.body.appendChild(overlay);
+
+  function base64ToBytes(b64) {
+    const bin = atob(String(b64 || ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  function downloadAttachment(a) {
+    const name = a?.filename || "adjunto.bin";
+    const b64 = a?.contentBase64;
+    if (!b64) {
+      setError("El adjunto no está disponible para descarga (contenido omitido en la API).");
+      return;
+    }
+    const bytes = base64ToBytes(b64);
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const aTag = document.createElement("a");
+    aTag.href = url;
+    aTag.download = name;
+    document.body.appendChild(aTag);
+    aTag.click();
+    aTag.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function toggleTxtPreview(a, idx) {
+    const box = overlay.querySelector(`#dfe-adj-prev-${idx}`);
+    if (!box) return;
+    const isOpen = !box.classList.contains("is-hidden");
+    if (isOpen) {
+      box.classList.add("is-hidden");
+      box.innerHTML = "";
+      return;
+    }
+    const b64 = a?.contentBase64;
+    if (!b64) {
+      setError("No se pudo mostrar vista previa (contenido omitido en la API).");
+      return;
+    }
+    try {
+      const bytes = base64ToBytes(b64);
+      const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      const clipped = text.length > 12000 ? text.slice(0, 12000) + "\n\n…(recortado)" : text;
+      box.innerHTML = `<pre class="dfe-msg-pre">${escHtml(clipped)}</pre>`;
+      box.classList.remove("is-hidden");
+    } catch (err) {
+      console.error("preview txt:", err);
+      setError("No se pudo mostrar vista previa del .txt.");
+    }
+  }
+
+  overlay.addEventListener("click", (e) => {
+    const dl = e.target.closest("[data-dfe-download]");
+    if (dl) {
+      const idx = parseInt(dl.getAttribute("data-dfe-download"), 10);
+      if (Number.isFinite(idx) && adj[idx]) downloadAttachment(adj[idx]);
+      return;
+    }
+    const pv = e.target.closest("[data-dfe-preview]");
+    if (pv) {
+      const idx = parseInt(pv.getAttribute("data-dfe-preview"), 10);
+      if (Number.isFinite(idx) && adj[idx]) toggleTxtPreview(adj[idx], idx);
+    }
+  });
 }
 
 async function openDetail(idComunicacion, cuitFromRow) {
