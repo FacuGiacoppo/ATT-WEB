@@ -585,12 +585,28 @@ function renderDelegacionGuideHtml() {
       ? `<pre class="dfe-guide-code">${esc(s.code.join("\n"))}</pre>`
       : "";
 
+    const subsections = Array.isArray(s.subsections) && s.subsections.length
+      ? `<div class="dfe-guide-subsections">${s.subsections
+          .map((sub) => {
+            const subList = (sub.items || []).map((it) => `<li class="dfe-guide-li">${esc(it)}</li>`).join("");
+            const subTag = sub.ordered ? "ol" : "ul";
+            return `
+              <div class="dfe-guide-sub">
+                <h4 class="dfe-guide-subh">${esc(sub.title)}</h4>
+                <${subTag} class="dfe-guide-list">${subList}</${subTag}>
+              </div>
+            `;
+          })
+          .join("")}</div>`
+      : "";
+
     return `
       <section class="dfe-guide-section">
         <h3 class="dfe-guide-h">${esc(s.title)}</h3>
         ${listBlock}
         ${callout}
         ${code}
+        ${subsections}
       </section>
     `;
   };
