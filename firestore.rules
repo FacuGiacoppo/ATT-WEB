@@ -128,5 +128,16 @@ service cloud.firestore {
       // Solo superadmin puede escribir (registrar una nueva subida)
       allow write: if isSuperadmin();
     }
+
+    // =========================
+    // DFE tracking interno (metadata del estudio)
+    // =========================
+
+    match /dfe_tracking/{docId} {
+      allow read: if canColab();
+      allow create: if canColab();
+      allow update: if canColab();
+      allow delete: if isAdmin();
+    }
   }
 }

@@ -75,6 +75,22 @@ export function renderConsultasDfeView() {
         <div class="dfe-results-head">
           <h2 class="dfe-results-title">Resultados</h2>
           <p class="dfe-results-meta" id="dfe-results-meta"></p>
+          <div class="dfe-kpis is-hidden" id="dfe-kpis"></div>
+          <div class="dfe-results-filters is-hidden" id="dfe-results-filters">
+            <label class="dfe-inline-filter">
+              <input type="checkbox" id="dfe-only-new" />
+              <span>Solo nuevas</span>
+            </label>
+            <label class="dfe-inline-filter">
+              <span class="dfe-inline-label">Estado ATT</span>
+              <select id="dfe-att-state">
+                <option value="all" selected>Todas</option>
+                <option value="new">Nuevas</option>
+                <option value="viewed">Vistas</option>
+                <option value="managed">Gestionadas</option>
+              </select>
+            </label>
+          </div>
           <div class="dfe-pager is-hidden" id="dfe-pager">
             <button type="button" class="btn-secondary dfe-btn-sm" id="dfe-prev">Anterior</button>
             <span class="dfe-pager-label" id="dfe-page-label">Página 1 de 1</span>
@@ -91,6 +107,7 @@ export function renderConsultasDfeView() {
                 <th>Organismo</th>
                 <th>Clasificación</th>
                 <th>Estado</th>
+                <th>ATT</th>
                 <th>Adjuntos</th>
                 <th class="dfe-th-action">Acción</th>
               </tr>
