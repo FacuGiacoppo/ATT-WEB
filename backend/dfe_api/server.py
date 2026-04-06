@@ -5,7 +5,8 @@ API HTTP DFE (Consultas DFE) para ATT-WEB.
 Ejecutar desde la raíz del repo o desde esta carpeta:
   cd backend/dfe_api && python server.py
 
-Variables de entorno: mismas que arca_ve_connector (ARCA_WSAA_*, ARCA_CERT_PATH, ARCA_KEY_PATH, ARCA_VE_WSDL).
+Variables de entorno: ver backend/dfe_api/ENVIRONMENTS.md
+  - ARCA_ENV=homologacion|produccion (o qa|prod, etc.) + certificados y opcionalmente URLs.
 Opcional: DFE_API_PORT=5050, DFE_API_HOST=127.0.0.1
 Depuración: DFE_DEBUG=1 imprime body JSON recibido y traza en dfe_service (consola del servidor).
 """
@@ -40,6 +41,11 @@ def _load_dotenv_connector() -> None:
 
 
 _load_dotenv_connector()
+
+# Homologación / producción: defaults de WSAA y WSDL antes de importar dfe_service
+from arca_runtime_env import ensure_arca_runtime_env
+
+ensure_arca_runtime_env()
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS

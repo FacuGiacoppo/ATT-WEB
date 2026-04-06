@@ -178,7 +178,7 @@ export async function renderRoute() {
         break;
       }
       content.innerHTML = renderConsultasDfeView();
-      initConsultasDfePage();
+      await initConsultasDfePage();
       break;
 
     default:

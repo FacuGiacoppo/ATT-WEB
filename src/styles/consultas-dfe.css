@@ -211,6 +211,13 @@
   line-height: 1.5;
 }
 
+.dfe-empty-hint--sub {
+  margin-top: 12px;
+  max-width: 520px;
+  font-size: 13px;
+  color: var(--ink-light);
+}
+
 .dfe-footnote {
   font-size: 12px;
   color: var(--ink-muted);

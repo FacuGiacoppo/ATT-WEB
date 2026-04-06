@@ -14,6 +14,10 @@ _ARCA_ROOT = Path(__file__).resolve().parent.parent / "arca_ve_connector"
 if str(_ARCA_ROOT) not in sys.path:
     sys.path.insert(0, str(_ARCA_ROOT))
 
+from arca_runtime_env import ensure_arca_runtime_env, get_arc_env_public_snapshot
+
+ensure_arca_runtime_env()
+
 from zeep.exceptions import Fault
 
 from arca_ve_connector.config import ArcaConnectorConfig
@@ -166,17 +170,21 @@ def consumir_comunicacion(
 
 
 def health_check() -> dict:
-    """Sin llamar AFIP: solo verifica que el conector sea importable y la config mínima."""
+    """Sin llamar AFIP: config mínima + snapshot de entorno (homologación / producción)."""
+    ensure_arca_runtime_env()
+    snap = get_arc_env_public_snapshot()
     try:
         ArcaConnectorConfig.from_env()
         return {
             "connector": "arca_ve_connector",
             "configPresent": True,
             "configMessage": None,
+            **snap,
         }
     except ValueError as e:
         return {
             "connector": "arca_ve_connector",
             "configPresent": False,
             "configMessage": str(e),
+            **snap,
         }

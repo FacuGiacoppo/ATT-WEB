@@ -82,6 +82,9 @@ export function renderConsultasDfeView() {
           <div class="dfe-empty-icon" aria-hidden="true">📭</div>
           <p class="dfe-empty-title">No hay comunicaciones en este rango</p>
           <p class="dfe-empty-hint">Probá ampliar las fechas o verificá el CUIT representado. Esto no es un error del sistema.</p>
+          <p class="dfe-empty-hint dfe-empty-hint--sub is-hidden" id="dfe-empty-hint-homo">
+            El servidor indica entorno de <strong>homologación</strong>: es normal que no haya comunicaciones para un CUIT aunque en <strong>producción</strong> sí existan notificaciones, porque son datos distintos.
+          </p>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { renderConsultasDfeView } from "./consultas-dfe.view.js";
 import { explainDfeFetchFailure } from "../../config/dfe-api.js";
-import { apiPostComunicaciones, apiPostComunicacionDetalle } from "./dfe.service.js";
+import { apiGetHealth, apiPostComunicaciones, apiPostComunicacionDetalle } from "./dfe.service.js";
 
 export { renderConsultasDfeView };
 
@@ -143,6 +143,14 @@ function applyDemoToForm() {
 }
 
 let lastListPayload = null;
+/** homologacion | produccion | null si /health no respondió */
+let dfeServerEnvironment = null;
+
+function refreshDfeEmptyHomoHint() {
+  const el = document.getElementById("dfe-empty-hint-homo");
+  if (!el) return;
+  el.classList.toggle("is-hidden", dfeServerEnvironment !== "homologacion");
+}
 
 async function runConsultar(extra) {
   setError("");
@@ -188,6 +196,7 @@ async function runConsultar(extra) {
     const hasRows = list.length > 0;
     showEl(document.querySelector(".dfe-table-scroll"), hasRows);
     showEl(empty, !hasRows);
+    if (!hasRows) refreshDfeEmptyHomoHint();
     if (hasRows) paintTable(list, payload.cuitRepresentada);
     else paintTable([], payload.cuitRepresentada);
   } catch (e) {
@@ -328,9 +337,19 @@ async function openDetail(idComunicacion, cuitFromRow) {
   }
 }
 
-export function initConsultasDfePage() {
+export async function initConsultasDfePage() {
   const root = document.getElementById("dfe-root");
   if (!root) return;
+
+  try {
+    const h = await apiGetHealth();
+    if (h.ok && h.environment) {
+      dfeServerEnvironment = h.environment;
+    }
+  } catch (e) {
+    console.warn("[DFE] /api/dfe/health:", e);
+  }
+  refreshDfeEmptyHomoHint();
 
   root.addEventListener("submit", (e) => {
     const form = e.target;
