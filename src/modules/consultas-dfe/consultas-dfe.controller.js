@@ -257,6 +257,21 @@ function getFilteredRows(rows) {
   return out;
 }
 
+function dfeFirestoreErrorMessage(err, fallback) {
+  const code = String(err?.code || err?.name || "");
+  const msg = String(err?.message || "");
+  if (code.includes("permission-denied") || msg.includes("permission-denied")) {
+    return (
+      "No se pudo guardar en Firestore (permission-denied). Cerrá sesión y volvé a iniciar sesión. " +
+      "Si persiste, revisá las reglas de Firestore para `dfe_tracking` y que tu usuario exista/esté activo."
+    );
+  }
+  if (code.includes("unauthenticated") || msg.toLowerCase().includes("auth")) {
+    return "No se pudo guardar en Firestore (sin autenticación). Volvé a iniciar sesión.";
+  }
+  return fallback || "No se pudo guardar el cambio interno (Firestore). Revisá consola para más detalle.";
+}
+
 async function runConsultar(extra) {
   setError("");
   const payload = { ...readFormPayload(), ...extra };
@@ -331,7 +346,13 @@ async function runConsultar(extra) {
       nextBtn.disabled = page >= totalPages;
     }
 
-    trackingById = await getTrackingBatch(payload.cuitRepresentada, list.map((x) => x.idComunicacion));
+    // Tracking es "nice to have": si Firestore falla no debe romper la consulta DFE.
+    try {
+      trackingById = await getTrackingBatch(payload.cuitRepresentada, list.map((x) => x.idComunicacion));
+    } catch (trkErr) {
+      console.warn("[DFE] tracking batch failed (non-blocking):", trkErr);
+      trackingById = {};
+    }
     lastPageRows = list;
     paintKpisAndFilters();
 
@@ -628,11 +649,20 @@ function renderDetailModal(data, { incluirAdjuntos }) {
           });
           trackingById[String(id)] = await getTracking(lastCuit, id);
           paintKpisAndFilters();
+          paintTable(getFilteredRows(lastPageRows), lastCuit);
           closeDetailModal();
           openDetail(String(id), lastCuit);
         } catch (err) {
           console.error("toggle managed:", err);
-          setError("No se pudo actualizar el estado gestionado.");
+          // Optimista: para esta sesión, togglea igual el badge aunque no persista.
+          try {
+            const id = data.idComunicacion;
+            const trkNow = trackingById[String(id)] || null;
+            trackingById[String(id)] = { ...(trkNow || {}), managed: !Boolean(trkNow?.managed) };
+            paintKpisAndFilters();
+            paintTable(getFilteredRows(lastPageRows), lastCuit);
+          } catch {}
+          setError(dfeFirestoreErrorMessage(err, "No se pudo actualizar el estado gestionado."));
         }
       })();
       return;
@@ -712,10 +742,18 @@ async function openDetail(idComunicacion, cuitFromRow) {
     try {
       await markViewedInApp({ cuitRepresentada: cuit, idComunicacion: idNum, user: appState.session.user });
       trackingById[String(idNum)] = await getTracking(cuit, idNum);
-      paintKpisAndFilters();
     } catch (e) {
       console.warn("[DFE] tracking view failed:", e);
+      // Optimista: si Firestore falla, igual marcamos "vista" en memoria para esta sesión.
+      trackingById[String(idNum)] = {
+        ...(trackingById[String(idNum)] || {}),
+        viewedInApp: true,
+      };
+      setError(dfeFirestoreErrorMessage(e, "No se pudo persistir la marca de vista. Se marcó solo en esta sesión."));
     }
+    paintKpisAndFilters();
+    // Refrescar badges en la tabla sin re-consultar.
+    paintTable(getFilteredRows(lastPageRows), lastCuit);
     renderDetailModal(res.data, { incluirAdjuntos });
   } catch (e) {
     console.error("dfe detalle:", e);
