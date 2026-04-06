@@ -28,6 +28,17 @@ def to_plain(obj: Any) -> Any:
         return obj
 
 
+def _dict_child_by_localname(parent: dict[str, Any], local: str) -> dict[str, Any] | None:
+    """Zeep a veces usa claves con namespace; matchea por nombre local del elemento."""
+    if local in parent and isinstance(parent[local], dict):
+        return parent[local]
+    suffix = "}" + local
+    for k, v in parent.items():
+        if isinstance(v, dict) and (k == local or k.endswith(suffix)):
+            return v
+    return None
+
+
 def _unwrap_respuesta_paginada(plain: dict[str, Any]) -> dict[str, Any]:
     """
     Zeep devuelve a veces el body SOAP envuelto:
@@ -38,28 +49,63 @@ def _unwrap_respuesta_paginada(plain: dict[str, Any]) -> dict[str, Any]:
         return {}
 
     def _is_rp(d: dict[str, Any]) -> bool:
-        return isinstance(d.get("pagina"), int) or any(
-            k in d for k in ("items", "Items", "totalItems", "totalPaginas")
-        )
+        p = d.get("pagina")
+        pag_ok = isinstance(p, (int, float)) and not isinstance(p, bool)
+        if isinstance(p, str) and p.strip().isdigit():
+            pag_ok = True
+        return pag_ok or any(k in d for k in ("items", "Items", "totalItems", "totalPaginas"))
 
     if _is_rp(plain):
         return plain
 
     for key in ("RespuestaPaginada", "respuestaPaginada"):
         inner = plain.get(key)
+        if inner is None:
+            inner = _dict_child_by_localname(plain, key)
         if isinstance(inner, dict) and _is_rp(inner):
             return inner
 
-    outer = plain.get("consultarComunicacionesResponse")
+    outer = _dict_child_by_localname(plain, "consultarComunicacionesResponse")
+    if outer is None:
+        outer = plain.get("consultarComunicacionesResponse")
     if isinstance(outer, dict):
         if _is_rp(outer):
             return outer
         for key in ("RespuestaPaginada", "respuestaPaginada"):
             inner = outer.get(key)
+            if inner is None:
+                inner = _dict_child_by_localname(outer, key)
             if isinstance(inner, dict) and _is_rp(inner):
                 return inner
 
     return plain
+
+
+def _find_paginated_dict_with_most_items(root: dict[str, Any]) -> dict[str, Any] | None:
+    """Último recurso: DFS por si la estructura serializada no coincide con el unwrap fijo."""
+    best: dict[str, Any] | None = None
+    best_n = 0
+    seen: set[int] = set()
+
+    def walk(d: dict[str, Any], depth: int) -> None:
+        nonlocal best, best_n
+        if depth > 16:
+            return
+        i = id(d)
+        if i in seen:
+            return
+        seen.add(i)
+        ir = d.get("items") if "items" in d else d.get("Items")
+        n = len(_extract_items_list(ir))
+        if n > best_n:
+            best = d
+            best_n = n
+        for v in d.values():
+            if isinstance(v, dict):
+                walk(v, depth + 1)
+
+    walk(root, 0)
+    return best if best_n > 0 else None
 
 
 def _unwrap_comunicacion(plain: dict[str, Any]) -> dict[str, Any]:
@@ -131,14 +177,21 @@ def _extract_items_list(items_node: Any) -> list[dict[str, Any]]:
 
 
 def normalize_consultar_comunicaciones_response(result: Any) -> dict[str, Any]:
-    plain = to_plain(result)
-    if not isinstance(plain, dict):
-        plain = {}
+    root = to_plain(result)
+    if not isinstance(root, dict):
+        root = {}
 
-    plain = _unwrap_respuesta_paginada(plain)
+    plain = _unwrap_respuesta_paginada(root)
 
     items_raw = plain.get("items") or plain.get("Items")
     rows = _extract_items_list(items_raw)
+
+    if not rows:
+        alt = _find_paginated_dict_with_most_items(root)
+        if alt is not None:
+            plain = alt
+            items_raw = plain.get("items") or plain.get("Items")
+            rows = _extract_items_list(items_raw)
 
     comunicaciones = [normalize_comunicacion_list_item(row) for row in rows]
 

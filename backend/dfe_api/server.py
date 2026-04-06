@@ -7,6 +7,7 @@ Ejecutar desde la raíz del repo o desde esta carpeta:
 
 Variables de entorno: mismas que arca_ve_connector (ARCA_WSAA_*, ARCA_CERT_PATH, ARCA_KEY_PATH, ARCA_VE_WSDL).
 Opcional: DFE_API_PORT=5050, DFE_API_HOST=127.0.0.1
+Depuración: DFE_DEBUG=1 imprime body JSON recibido y traza en dfe_service (consola del servidor).
 """
 from __future__ import annotations
 
@@ -89,6 +90,8 @@ def route_estados():
 @app.post("/api/dfe/comunicaciones")
 def route_comunicaciones():
     body = request.get_json(silent=True) or {}
+    if os.environ.get("DFE_DEBUG", "").lower() in ("1", "true", "yes"):
+        print(f"[dfe] POST /api/dfe/comunicaciones body recibido: {body!r}", flush=True)
     cuit = (body.get("cuitRepresentada") or "").strip()
     fd = (body.get("fechaDesde") or "").strip()
     fh = (body.get("fechaHasta") or "").strip()

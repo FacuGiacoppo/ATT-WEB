@@ -23,6 +23,20 @@ function onlyDigits(s) {
   return String(s ?? "").replace(/\D/g, "");
 }
 
+/** HTML input[type=date] ya manda YYYY-MM-DD; por si otro cliente manda DD/MM/AAAA. */
+function normalizeDateForApi(s) {
+  const t = String(s ?? "").trim();
+  if (!t) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (m) {
+    const d = m[1].padStart(2, "0");
+    const mo = m[2].padStart(2, "0");
+    return `${m[3]}-${mo}-${d}`;
+  }
+  return t;
+}
+
 function showEl(el, show) {
   if (!el) return;
   el.classList.toggle("is-hidden", !show);
@@ -105,8 +119,8 @@ function paintTable(rows, cuitRepresentada) {
 
 function readFormPayload() {
   const cuit = onlyDigits(document.getElementById("dfe-cuit")?.value);
-  const fechaDesde = document.getElementById("dfe-fecha-desde")?.value?.trim() || "";
-  const fechaHasta = document.getElementById("dfe-fecha-hasta")?.value?.trim() || "";
+  const fechaDesde = normalizeDateForApi(document.getElementById("dfe-fecha-desde")?.value);
+  const fechaHasta = normalizeDateForApi(document.getElementById("dfe-fecha-hasta")?.value);
   const rpp = parseInt(document.getElementById("dfe-rpp")?.value || "10", 10);
   return {
     cuitRepresentada: cuit,
@@ -133,6 +147,9 @@ let lastListPayload = null;
 async function runConsultar(extra) {
   setError("");
   const payload = { ...readFormPayload(), ...extra };
+  payload.fechaDesde = normalizeDateForApi(payload.fechaDesde);
+  payload.fechaHasta = normalizeDateForApi(payload.fechaHasta);
+  console.log("[DFE] POST /api/dfe/comunicaciones", JSON.stringify(payload));
   lastListPayload = { cuitRepresentada: payload.cuitRepresentada };
 
   if (payload.cuitRepresentada.length !== 11) {

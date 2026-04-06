@@ -24,6 +24,7 @@ from normalize import (
     normalize_comunicacion_detalle,
     normalize_consultar_comunicaciones_response,
     normalize_estados_response,
+    to_plain,
 )
 
 
@@ -50,6 +51,35 @@ def _validate_date(s: str, name: str) -> str:
     if not s or not re.match(r"^\d{4}-\d{2}-\d{2}$", s.strip()):
         raise DfeServiceError("parametros", f"{name} debe ser YYYY-MM-DD.", http_status=400)
     return s.strip()
+
+
+def _dfe_debug(msg: str) -> None:
+    if os.environ.get("DFE_DEBUG", "").lower() in ("1", "true", "yes"):
+        print(f"[dfe] {msg}", flush=True)
+
+
+def _coerce_to_yyyy_mm_dd(s: str, field: str) -> str:
+    """Acepta YYYY-MM-DD (HTML date) o DD/MM/AAAA por si el cliente envía otro formato."""
+    raw = (s or "").strip()
+    if not raw:
+        raise DfeServiceError("parametros", f"{field} vacío.", http_status=400)
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", raw):
+        return raw
+    m = re.match(r"^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\s*$", raw)
+    if m:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if not (1 <= month <= 12 and 1 <= day <= 31):
+            raise DfeServiceError(
+                "parametros",
+                f"{field}: fecha DD/MM/AAAA inválida ({raw!r}).",
+                http_status=400,
+            )
+        return f"{year:04d}-{month:02d}-{day:02d}"
+    raise DfeServiceError(
+        "parametros",
+        f"{field} debe ser YYYY-MM-DD o DD/MM/AAAA. Recibido: {raw[:48]!r}",
+        http_status=400,
+    )
 
 
 def _ve_client(cuit: str) -> VEConsumerClient:
@@ -83,8 +113,8 @@ def consultar_comunicaciones(
     resultados_por_pagina: int,
 ) -> dict:
     cuit = _validate_cuit(cuit_representada)
-    fd = _validate_date(fecha_desde, "fechaDesde")
-    fh = _validate_date(fecha_hasta, "fechaHasta")
+    fd = _coerce_to_yyyy_mm_dd(fecha_desde, "fechaDesde")
+    fh = _coerce_to_yyyy_mm_dd(fecha_hasta, "fechaHasta")
     if pagina < 1:
         raise DfeServiceError("parametros", "pagina debe ser >= 1", http_status=400)
     if resultados_por_pagina < 1 or resultados_por_pagina > 100:
@@ -96,6 +126,7 @@ def consultar_comunicaciones(
         "pagina": pagina,
         "resultadosPorPagina": resultados_por_pagina,
     }
+    _dfe_debug(f"consultar_comunicaciones cuit={cuit!r} filter={filter_!r} pagina={pagina} rpp={resultados_por_pagina}")
     try:
         ve = _ve_client(cuit)
         raw = ve.consultar_comunicaciones(filter_)
@@ -103,7 +134,16 @@ def consultar_comunicaciones(
         raise DfeServiceError("wsaa", str(e), http_status=502, detail={"status": e.status_code}) from e
     except Fault as e:
         raise DfeServiceError("soap_fault", getattr(e, "message", str(e)) or "Fault SOAP", http_status=502) from e
-    return normalize_consultar_comunicaciones_response(raw)
+    rp = to_plain(raw)
+    if isinstance(rp, dict):
+        _dfe_debug(f"SOAP root keys: {list(rp.keys())!r}")
+    else:
+        _dfe_debug(f"SOAP root tipo: {type(rp).__name__!r}")
+    data = normalize_consultar_comunicaciones_response(raw)
+    _dfe_debug(
+        f"normalizado totalItems={data.get('totalItems')!r} n_comunicaciones={len(data.get('comunicaciones') or [])}"
+    )
+    return data
 
 
 def consumir_comunicacion(
