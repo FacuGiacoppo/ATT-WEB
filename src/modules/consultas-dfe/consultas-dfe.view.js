@@ -40,6 +40,13 @@ export function renderConsultasDfeView() {
                 <option value="50">50</option>
               </select>
             </label>
+            <label class="dfe-field">
+              <span class="dfe-label">Orden por fecha</span>
+              <select id="dfe-order" name="order">
+                <option value="desc" selected>Más recientes primero</option>
+                <option value="asc">Más antiguas primero</option>
+              </select>
+            </label>
           </div>
           <div class="dfe-form-actions">
             <button type="submit" class="btn-primary" id="dfe-btn-consultar">Consultar</button>
@@ -60,6 +67,11 @@ export function renderConsultasDfeView() {
         <div class="dfe-results-head">
           <h2 class="dfe-results-title">Resultados</h2>
           <p class="dfe-results-meta" id="dfe-results-meta"></p>
+          <div class="dfe-pager is-hidden" id="dfe-pager">
+            <button type="button" class="btn-secondary dfe-btn-sm" id="dfe-prev">Anterior</button>
+            <span class="dfe-pager-label" id="dfe-page-label">Página 1 de 1</span>
+            <button type="button" class="btn-secondary dfe-btn-sm" id="dfe-next">Siguiente</button>
+          </div>
         </div>
         <div class="dfe-table-scroll">
           <table class="dfe-table">

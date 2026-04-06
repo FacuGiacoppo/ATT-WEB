@@ -111,6 +111,20 @@
   margin-bottom: 14px;
 }
 
+.dfe-pager {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dfe-pager-label {
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
 .dfe-results-title {
   margin: 0 0 4px;
   font-size: 18px;

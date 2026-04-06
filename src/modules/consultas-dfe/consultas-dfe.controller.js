@@ -105,6 +105,29 @@ function fmtBoolAdj(v) {
   return "—";
 }
 
+function parseAfipDateToMs(s) {
+  const t = String(s || "").trim();
+  if (!t) return null;
+  // Formato típico: "YYYY-MM-DD HH:MM:SS" o "YYYY-MM-DD"
+  const d = new Date(t.replace(" ", "T"));
+  const ms = d.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function sortByFechaPublicacion(items, order) {
+  const dir = order === "asc" ? 1 : -1;
+  const arr = Array.isArray(items) ? [...items] : [];
+  arr.sort((a, b) => {
+    const am = parseAfipDateToMs(a?.fechaPublicacion) ?? 0;
+    const bm = parseAfipDateToMs(b?.fechaPublicacion) ?? 0;
+    if (am !== bm) return (am - bm) * dir;
+    const ai = Number(a?.idComunicacion ?? 0);
+    const bi = Number(b?.idComunicacion ?? 0);
+    return (ai - bi) * dir;
+  });
+  return arr;
+}
+
 function paintTable(rows, cuitRepresentada) {
   const tb = document.getElementById("dfe-table-body");
   if (!tb) return;
@@ -135,12 +158,14 @@ function readFormPayload() {
   const fechaDesde = normalizeDateForApi(document.getElementById("dfe-fecha-desde")?.value);
   const fechaHasta = normalizeDateForApi(document.getElementById("dfe-fecha-hasta")?.value);
   const rpp = parseInt(document.getElementById("dfe-rpp")?.value || "10", 10);
+  const order = String(document.getElementById("dfe-order")?.value || "desc");
   return {
     cuitRepresentada: cuit,
     fechaDesde,
     fechaHasta,
     pagina: 1,
     resultadosPorPagina: Number.isFinite(rpp) ? rpp : 10,
+    order,
   };
 }
 
@@ -158,6 +183,11 @@ function applyDemoToForm() {
 let lastListPayload = null;
 /** homologacion | produccion | null si /health no respondió */
 let dfeServerEnvironment = null;
+let currentPage = 1;
+let lastTotalPages = 1;
+let lastTotalItems = 0;
+let lastRpp = 10;
+let lastOrder = "desc";
 
 function refreshDfeEmptyHomoHint() {
   const el = document.getElementById("dfe-empty-hint-homo");
@@ -172,6 +202,9 @@ async function runConsultar(extra) {
   payload.fechaHasta = normalizeDateForApi(payload.fechaHasta);
   console.log("[DFE] POST /api/dfe/comunicaciones", JSON.stringify(payload));
   lastListPayload = { cuitRepresentada: payload.cuitRepresentada };
+  currentPage = parseInt(payload.pagina || 1, 10) || 1;
+  lastRpp = parseInt(payload.resultadosPorPagina || 10, 10) || 10;
+  lastOrder = payload.order === "asc" ? "asc" : "desc";
 
   if (payload.cuitRepresentada.length !== 11) {
     setError("El CUIT representado debe tener 11 dígitos.");
@@ -185,10 +218,16 @@ async function runConsultar(extra) {
   const wrap = document.getElementById("dfe-results-wrap");
   const empty = document.getElementById("dfe-empty");
   const meta = document.getElementById("dfe-results-meta");
+  const pager = document.getElementById("dfe-pager");
+  const prevBtn = document.getElementById("dfe-prev");
+  const nextBtn = document.getElementById("dfe-next");
+  const pageLabel = document.getElementById("dfe-page-label");
 
   setLoading(true);
   try {
-    const res = await apiPostComunicaciones(payload);
+    // No enviamos "order" al backend: es client-side.
+    const { order, ...apiPayload } = payload;
+    const res = await apiPostComunicaciones(apiPayload);
     if (!res.ok || !res.data) {
       // UX: Error 101 de AFIP → sugerir/autocorregir fecha mínima.
       if (res.error === "soap_fault") {
@@ -208,14 +247,25 @@ async function runConsultar(extra) {
     }
 
     const data = res.data;
-    const list = data.comunicaciones || [];
-    const total = data.totalItems ?? list.length;
-    const page = data.pagina ?? payload.pagina;
-    const totalPages = data.totalPaginas ?? 1;
+    const listRaw = data.comunicaciones || [];
+    const list = sortByFechaPublicacion(listRaw, lastOrder);
+    const total = Number(data.totalItems ?? listRaw.length ?? 0) || 0;
+    const page = Number(data.pagina ?? apiPayload.pagina ?? 1) || 1;
+    const totalPages = Number(data.totalPaginas ?? 1) || 1;
+    lastTotalPages = totalPages;
+    lastTotalItems = total;
 
     showEl(wrap, true);
     if (meta) {
-      meta.textContent = `Página ${page} de ${totalPages} · ${total} comunicación(es) en total`;
+      const start = total > 0 ? (page - 1) * lastRpp + 1 : 0;
+      const end = total > 0 ? start + list.length - 1 : 0;
+      meta.textContent = `Mostrando ${start} a ${end} de ${total} comunicaciones`;
+    }
+    if (pager && prevBtn && nextBtn && pageLabel) {
+      showEl(pager, totalPages > 1);
+      pageLabel.textContent = `Página ${page} de ${totalPages}`;
+      prevBtn.disabled = page <= 1;
+      nextBtn.disabled = page >= totalPages;
     }
 
     const hasRows = list.length > 0;
@@ -400,6 +450,27 @@ export async function initConsultasDfePage() {
       const id = decodeURIComponent(det.getAttribute("data-dfe-detail") || "");
       const cuitRow = det.getAttribute("data-dfe-cuit") || "";
       openDetail(id, cuitRow);
+    }
+
+    const prev = e.target.closest("#dfe-prev");
+    if (prev) {
+      const nextPage = Math.max(1, (currentPage || 1) - 1);
+      runConsultar({ pagina: nextPage });
+      return;
+    }
+    const next = e.target.closest("#dfe-next");
+    if (next) {
+      const nextPage = Math.min(lastTotalPages || 1, (currentPage || 1) + 1);
+      runConsultar({ pagina: nextPage });
+      return;
+    }
+  });
+
+  // Reordenar en client-side (re-consulta para mantener coherencia paginada).
+  root.addEventListener("change", (e) => {
+    const sel = e.target?.closest?.("#dfe-order");
+    if (sel) {
+      runConsultar({ pagina: 1 });
     }
   });
 }
