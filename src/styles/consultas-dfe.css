@@ -586,3 +586,22 @@
   color: #e8e8f0;
   border-radius: var(--radius);
 }
+
+/* Persistencia / colaboración en modal DFE */
+.dfe-collab-status {
+  margin: 0 0 12px;
+  font-size: 13px;
+  min-height: 1.25em;
+}
+
+.dfe-collab-status--ok {
+  color: #1b5e20;
+}
+
+.dfe-collab-status--warn {
+  color: #b45309;
+}
+
+.dfe-collab-status--err {
+  color: var(--danger, #c62828);
+}

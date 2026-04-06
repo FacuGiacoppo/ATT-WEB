@@ -12,14 +12,15 @@ import {
 
 import { auth, db } from "../../config/firebase.js";
 
-export async function loginWithEmail(email, password) {
-  const result = await signInWithEmailAndPassword(auth, email, password);
-  const firebaseUser = result.user;
+async function readAppUserProfileOrThrow(firebaseUser) {
+  if (!firebaseUser) {
+    throw new Error("NO_FIREBASE_USER");
+  }
 
   const userRef = doc(db, "users", firebaseUser.uid);
   const userSnap = await getDoc(userRef);
 
-  if (!userSnap.exists) {
+  if (!userSnap.exists()) {
     await signOut(auth);
     throw new Error("USER_PROFILE_NOT_FOUND");
   }
@@ -31,10 +32,10 @@ export async function loginWithEmail(email, password) {
     throw new Error("USER_INACTIVE");
   }
 
-  await updateDoc(userRef, {
-    lastLoginAt: serverTimestamp()
-  });
+  return { userRef, profile, firebaseUser };
+}
 
+function profileToSessionUser(firebaseUser, profile) {
   return {
     uid: firebaseUser.uid,
     email: firebaseUser.email,
@@ -43,6 +44,25 @@ export async function loginWithEmail(email, password) {
     active: profile.active ?? false,
     mustChangePassword: profile.mustChangePassword ?? false
   };
+}
+
+/**
+ * Restauración de sesión (refresh): solo lee perfil, no toca lastLoginAt.
+ */
+export async function loadAppUserFromFirebaseUser(firebaseUser) {
+  const { profile, firebaseUser: fu } = await readAppUserProfileOrThrow(firebaseUser);
+  return profileToSessionUser(fu, profile);
+}
+
+export async function loginWithEmail(email, password) {
+  const result = await signInWithEmailAndPassword(auth, email, password);
+  const { userRef, profile, firebaseUser } = await readAppUserProfileOrThrow(result.user);
+
+  await updateDoc(userRef, {
+    lastLoginAt: serverTimestamp()
+  });
+
+  return profileToSessionUser(firebaseUser, profile);
 }
 
 export async function logout() {

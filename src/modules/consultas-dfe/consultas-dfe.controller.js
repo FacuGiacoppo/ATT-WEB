@@ -11,6 +11,10 @@ import {
   setManaged,
   logAttachmentDownload,
 } from "./dfe-tracking.service.js";
+import {
+  CollabWriteConflictError,
+  timestampToMillis,
+} from "../../services/collaboration/collaboration.service.js";
 
 export { renderConsultasDfeView };
 
@@ -59,6 +63,18 @@ function setError(msg) {
   showEl(box, Boolean(msg));
 }
 
+/** Estado de persistencia en el modal (nota / gestionada), sin usar el banner rojo global. */
+function setInternalCollabStatus(overlay, message, kind = "") {
+  const el = overlay?.querySelector?.("#dfe-collab-status");
+  if (!el) return;
+  el.textContent = message || "";
+  el.classList.remove("dfe-collab-status--ok", "dfe-collab-status--warn", "dfe-collab-status--err");
+  if (kind === "ok") el.classList.add("dfe-collab-status--ok");
+  else if (kind === "warn") el.classList.add("dfe-collab-status--warn");
+  else if (kind === "err") el.classList.add("dfe-collab-status--err");
+  showEl(el, Boolean(message));
+}
+
 function setLoading(on) {
   const el = document.getElementById("dfe-loading");
   showEl(el, on);
@@ -100,6 +116,42 @@ function extractMinFechaDesde(message) {
   const m = s.match(/\bM[íi]nima fecha\s*\[([0-9]{4}-[0-9]{2}-[0-9]{2})\]/i);
   if (m?.[1]) return m[1];
   return null;
+}
+
+function formatCollabActivityAt(at) {
+  if (at == null) return "—";
+  if (typeof at.toDate === "function") {
+    try {
+      return at.toDate().toLocaleString();
+    } catch {
+      return "—";
+    }
+  }
+  if (typeof at.seconds === "number") {
+    return new Date(at.seconds * 1000).toLocaleString();
+  }
+  return String(at);
+}
+
+function paintDfeActivityInModal(overlay, trk) {
+  const box = overlay.querySelector("#dfe-activity");
+  if (!box) return;
+  const log = Array.isArray(trk?.activityLog) ? [...trk.activityLog] : [];
+  log.sort((a, b) => (timestampToMillis(b.at) ?? 0) - (timestampToMillis(a.at) ?? 0));
+  if (!log.length) {
+    box.innerHTML = "<p class=\"dfe-muted\">Sin actividad registrada aún.</p>";
+    return;
+  }
+  box.innerHTML = `<ul class="dfe-activity-list">${log
+    .map((e) => {
+      const who = e.byName ?? e.by ?? "—";
+      const role = e.byRole ? ` <span class="dfe-muted">(${escHtml(String(e.byRole))})</span>` : "";
+      const t = escHtml(formatCollabActivityAt(e.at));
+      const fnRaw = e.payload?.filename != null ? e.payload.filename : e.filename;
+      const fn = fnRaw != null && fnRaw !== "" ? ` · ${escHtml(String(fnRaw))}` : "";
+      return `<li><span class="dfe-activity-type">${escHtml(String(e.type || "evento"))}</span> · ${t} · <strong>${escHtml(String(who))}</strong>${role}${fn}</li>`;
+    })
+    .join("")}</ul>`;
 }
 
 function fmtDatePair(pub, notif) {
@@ -346,7 +398,8 @@ async function runConsultar(extra) {
       nextBtn.disabled = page >= totalPages;
     }
 
-    // Tracking es "nice to have": si Firestore falla no debe romper la consulta DFE.
+    // Metadata Firestore (badges ATT) se fusiona con filas AFIP: la lista viene del API; el overlay es solo UI.
+    // No se reordena ni mutan campos fiscales; si falla Firestore, la consulta DFE sigue válida.
     try {
       trackingById = await getTrackingBatch(payload.cuitRepresentada, list.map((x) => x.idComunicacion));
     } catch (trkErr) {
@@ -376,7 +429,12 @@ function closeDetailModal() {
   document.getElementById("dfe-detail-overlay")?.remove();
 }
 
-function renderDetailModal(data, { incluirAdjuntos }) {
+function renderDetailModal(data, options = {}) {
+  const { incluirAdjuntos = true, collabBaseline: rawBaseline } = options;
+  const collabBaseline = {
+    internalNoteUpdatedAt: rawBaseline?.internalNoteUpdatedAt ?? null,
+    managed: Boolean(rawBaseline?.managed),
+  };
   const title = data.asunto || `Comunicación ${data.idComunicacion ?? ""}`;
   const bodyText = data.cuerpo || data.mensaje || "";
   const adj = Array.isArray(data.adjuntos) ? data.adjuntos : [];
@@ -440,7 +498,7 @@ function renderDetailModal(data, { incluirAdjuntos }) {
           <dt>Publicación</dt><dd>${escHtml(data.fechaPublicacion)}</dd>
           <dt>Notificación</dt><dd>${escHtml(data.fechaNotificacion)}</dd>
           <dt>Lectura</dt><dd>${escHtml(data.fechaLectura)}</dd>
-          <dt>Estado</dt><dd>${escHtml(data.estadoDescripcion || data.estado)} ${attBadge}</dd>
+          <dt>Estado</dt><dd data-dfe-estado-att>${escHtml(data.estadoDescripcion || data.estado)} ${attBadge}</dd>
         </dl>
         <div class="dfe-detail-block">
           <h4 class="dfe-detail-h">Contenido</h4>
@@ -456,6 +514,7 @@ function renderDetailModal(data, { incluirAdjuntos }) {
         </div>
         <div class="dfe-detail-block">
           <h4 class="dfe-detail-h">Gestión interna (ATT-WEB)</h4>
+          <p class="dfe-collab-status is-hidden" id="dfe-collab-status" role="status" aria-live="polite"></p>
           <div class="dfe-internal">
             <div class="dfe-internal-row">
               <button type="button" class="btn-secondary dfe-btn-sm" data-dfe-toggle-managed>
@@ -471,7 +530,15 @@ function renderDetailModal(data, { incluirAdjuntos }) {
                 <button type="button" class="btn-primary dfe-btn-sm" data-dfe-save-note>Guardar nota</button>
               </div>
               <div class="dfe-muted" style="margin-top:8px;font-size:12px">
-                ${trk?.firstViewedBy ? `Vista por primera vez por: <strong>${escHtml(trk.firstViewedBy)}</strong>` : "Aún sin vistas internas registradas."}
+                ${
+                  trk?.firstViewedBy
+                    ? `Vista por primera vez por: <strong>${escHtml(trk.firstViewedBy)}</strong>${
+                        trk.firstViewedByRole
+                          ? ` <span class="dfe-muted">(${escHtml(String(trk.firstViewedByRole))})</span>`
+                          : ""
+                      }`
+                    : "Aún sin vistas internas registradas."
+                }
               </div>
             </div>
           </div>
@@ -503,6 +570,8 @@ function renderDetailModal(data, { incluirAdjuntos }) {
   });
 
   document.body.appendChild(overlay);
+  overlay._dfeCollabBaseline = { ...collabBaseline };
+  paintDfeActivityInModal(overlay, trk);
 
   function base64ToBytes(b64) {
     const bin = atob(String(b64 || ""));
@@ -638,31 +707,62 @@ function renderDetailModal(data, { incluirAdjuntos }) {
     const tog = e.target.closest("[data-dfe-toggle-managed]");
     if (tog) {
       (async () => {
+        const btn = tog;
+        const baseline = overlay._dfeCollabBaseline || collabBaseline;
+        const nextManaged = !baseline.managed;
+        btn.disabled = true;
+        setInternalCollabStatus(overlay, "Guardando estado…", "");
         try {
           const id = data.idComunicacion;
-          const trkNow = trackingById[String(id)] || null;
           await setManaged({
             cuitRepresentada: lastCuit,
             idComunicacion: id,
-            managed: !trkNow?.managed,
+            managed: nextManaged,
             user: appState.session.user,
+            expectedManaged: baseline.managed,
           });
-          trackingById[String(id)] = await getTracking(lastCuit, id);
+          const fresh = await getTracking(lastCuit, id);
+          trackingById[String(id)] = fresh;
           paintKpisAndFilters();
           paintTable(getFilteredRows(lastPageRows), lastCuit);
-          closeDetailModal();
-          openDetail(String(id), lastCuit);
+          overlay._dfeCollabBaseline = {
+            internalNoteUpdatedAt: fresh?.internalNoteUpdatedAt ?? null,
+            managed: Boolean(fresh?.managed),
+          };
+          btn.textContent = overlay._dfeCollabBaseline.managed
+            ? "Marcar como no gestionada"
+            : "Marcar como gestionada";
+          const trkF = fresh;
+          const attStateF = computeAttState(trkF);
+          const attBadgeF =
+            attStateF === "new"
+              ? `<span class="dfe-badge dfe-badge--new">Nueva</span>`
+              : attStateF === "managed"
+              ? `<span class="dfe-badge dfe-badge--managed">Gestionada</span>`
+              : `<span class="dfe-badge dfe-badge--viewed">Vista</span>`;
+          const dd = overlay.querySelector("[data-dfe-estado-att]");
+          if (dd) {
+            dd.innerHTML = `${escHtml(data.estadoDescripcion || data.estado)} ${attBadgeF}`;
+          }
+          paintDfeActivityInModal(overlay, fresh);
+          setInternalCollabStatus(overlay, "Estado guardado.", "ok");
+          setTimeout(() => setInternalCollabStatus(overlay, ""), 2200);
         } catch (err) {
           console.error("toggle managed:", err);
-          // Optimista: para esta sesión, togglea igual el badge aunque no persista.
-          try {
-            const id = data.idComunicacion;
-            const trkNow = trackingById[String(id)] || null;
-            trackingById[String(id)] = { ...(trkNow || {}), managed: !Boolean(trkNow?.managed) };
-            paintKpisAndFilters();
-            paintTable(getFilteredRows(lastPageRows), lastCuit);
-          } catch {}
-          setError(dfeFirestoreErrorMessage(err, "No se pudo actualizar el estado gestionado."));
+          if (err instanceof CollabWriteConflictError && err.kind === "managed") {
+            setInternalCollabStatus(overlay, "", "");
+            setError(err.message);
+            closeDetailModal();
+            openDetail(String(data.idComunicacion), lastCuit);
+          } else {
+            setInternalCollabStatus(
+              overlay,
+              dfeFirestoreErrorMessage(err, "No se pudo actualizar el estado gestionado."),
+              "err"
+            );
+          }
+        } finally {
+          btn.disabled = false;
         }
       })();
       return;
@@ -671,6 +771,10 @@ function renderDetailModal(data, { incluirAdjuntos }) {
     const save = e.target.closest("[data-dfe-save-note]");
     if (save) {
       (async () => {
+        const btn = save;
+        const baseline = overlay._dfeCollabBaseline || collabBaseline;
+        btn.disabled = true;
+        setInternalCollabStatus(overlay, "Guardando nota…", "");
         try {
           const id = data.idComunicacion;
           const note = overlay.querySelector("#dfe-internal-note")?.value ?? "";
@@ -679,12 +783,40 @@ function renderDetailModal(data, { incluirAdjuntos }) {
             idComunicacion: id,
             note,
             user: appState.session.user,
+            expectedInternalNoteUpdatedAt: baseline.internalNoteUpdatedAt ?? null,
           });
-          trackingById[String(id)] = await getTracking(lastCuit, id);
-          setError("Nota guardada.");
+          const fresh = await getTracking(lastCuit, id);
+          trackingById[String(id)] = fresh;
+          overlay._dfeCollabBaseline = {
+            internalNoteUpdatedAt: fresh?.internalNoteUpdatedAt ?? null,
+            managed: Boolean(fresh?.managed),
+          };
+          paintDfeActivityInModal(overlay, fresh);
+          setInternalCollabStatus(overlay, "Nota guardada.", "ok");
+          setTimeout(() => setInternalCollabStatus(overlay, ""), 2200);
         } catch (err) {
           console.error("save note:", err);
-          setError("No se pudo guardar la nota interna.");
+          if (err instanceof CollabWriteConflictError && err.kind === "note") {
+            const id = data.idComunicacion;
+            const fresh = await getTracking(lastCuit, id);
+            trackingById[String(id)] = fresh ?? trackingById[String(id)];
+            const ta = overlay.querySelector("#dfe-internal-note");
+            if (ta) ta.value = fresh?.internalNote ?? "";
+            overlay._dfeCollabBaseline = {
+              internalNoteUpdatedAt: fresh?.internalNoteUpdatedAt ?? null,
+              managed: Boolean(fresh?.managed),
+            };
+            paintDfeActivityInModal(overlay, fresh);
+            setInternalCollabStatus(overlay, err.message, "warn");
+          } else {
+            setInternalCollabStatus(
+              overlay,
+              dfeFirestoreErrorMessage(err, "No se pudo guardar la nota interna."),
+              "err"
+            );
+          }
+        } finally {
+          btn.disabled = false;
         }
       })();
     }
@@ -754,7 +886,14 @@ async function openDetail(idComunicacion, cuitFromRow) {
     paintKpisAndFilters();
     // Refrescar badges en la tabla sin re-consultar.
     paintTable(getFilteredRows(lastPageRows), lastCuit);
-    renderDetailModal(res.data, { incluirAdjuntos });
+    const trkBaseline = trackingById[String(idNum)] || null;
+    renderDetailModal(res.data, {
+      incluirAdjuntos,
+      collabBaseline: {
+        internalNoteUpdatedAt: trkBaseline?.internalNoteUpdatedAt ?? null,
+        managed: Boolean(trkBaseline?.managed),
+      },
+    });
   } catch (e) {
     console.error("dfe detalle:", e);
     closeDetailModal();

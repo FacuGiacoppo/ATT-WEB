@@ -139,5 +139,31 @@ service cloud.firestore {
       allow update: if canColab();
       allow delete: if isAdmin();
     }
+
+    // =========================
+    // Colaboración transversal (metadata interna por módulo + entidad)
+    // Doc ID: {moduleId}__{entityKey}  ej. dfe__20279722796__610201380
+    //
+    // Seguridad:
+    // - Lectura/escritura: solo roles colaborativos (superadmin / admin / colaborador).
+    // - "lectura" u otros roles: NO pasan canColab() → sin acceso.
+    // - Permisos por pantalla (ej. módulo DFE) los aplica la app; aquí no se discrimina moduleId.
+    //
+    // Create: exigimos moduleId + entityKey + schemaVersion para evitar docs basura;
+    // los updates suelen ser merge parcial y pueden omitir esos campos.
+    // =========================
+
+    match /att_collaboration/{docId} {
+      allow read: if canColab();
+
+      allow create: if canColab()
+        && request.resource.data.moduleId is string
+        && request.resource.data.entityKey is string
+        && request.resource.data.schemaVersion is int;
+
+      allow update: if canColab();
+
+      allow delete: if isAdmin();
+    }
   }
 }
