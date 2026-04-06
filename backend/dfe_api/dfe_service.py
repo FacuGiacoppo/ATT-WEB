@@ -88,6 +88,17 @@ def _coerce_to_yyyy_mm_dd(s: str, field: str) -> str:
 
 def _ve_client(cuit: str) -> VEConsumerClient:
     cfg = ArcaConnectorConfig.from_env()
+    snap = get_arc_env_public_snapshot()
+    _dfe_debug(
+        "env efectivo: "
+        f"environment={snap.get('environment')!r} wsaaUrl={snap.get('wsaaUrl')!r} veWsdl={snap.get('veWsdl')!r} "
+        f"wsaaService={cfg.wsaa_service!r}"
+    )
+    # No imprimir contenido de cert/key. Solo basename para confirmar qué archivo toma.
+    _dfe_debug(
+        "cert/key: "
+        f"cert={os.path.basename(cfg.cert_path)!r} key={os.path.basename(cfg.key_path)!r}"
+    )
     ta = request_ticket(
         cfg.wsaa_url,
         cfg.wsaa_service,
