@@ -28,6 +28,87 @@ def to_plain(obj: Any) -> Any:
         return obj
 
 
+def _unwrap_respuesta_paginada(plain: dict[str, Any]) -> dict[str, Any]:
+    """
+    Zeep devuelve a veces el body SOAP envuelto:
+    consultarComunicacionesResponse → RespuestaPaginada (pagina, totalItems, items, …).
+    Sin este paso, items queda vacío y el front muestra 0 resultados.
+    """
+    if not isinstance(plain, dict):
+        return {}
+
+    def _is_rp(d: dict[str, Any]) -> bool:
+        return isinstance(d.get("pagina"), int) or any(
+            k in d for k in ("items", "Items", "totalItems", "totalPaginas")
+        )
+
+    if _is_rp(plain):
+        return plain
+
+    for key in ("RespuestaPaginada", "respuestaPaginada"):
+        inner = plain.get(key)
+        if isinstance(inner, dict) and _is_rp(inner):
+            return inner
+
+    outer = plain.get("consultarComunicacionesResponse")
+    if isinstance(outer, dict):
+        if _is_rp(outer):
+            return outer
+        for key in ("RespuestaPaginada", "respuestaPaginada"):
+            inner = outer.get(key)
+            if isinstance(inner, dict) and _is_rp(inner):
+                return inner
+
+    return plain
+
+
+def _unwrap_comunicacion(plain: dict[str, Any]) -> dict[str, Any]:
+    """consumirComunicacionResponse → Comunicacion."""
+    if not isinstance(plain, dict):
+        return {}
+
+    if plain.get("idComunicacion") is not None or plain.get("asunto") is not None:
+        return plain
+
+    for key in ("Comunicacion", "comunicacion"):
+        inner = plain.get(key)
+        if isinstance(inner, dict):
+            return inner
+
+    outer = plain.get("consumirComunicacionResponse")
+    if isinstance(outer, dict):
+        for key in ("Comunicacion", "comunicacion"):
+            inner = outer.get(key)
+            if isinstance(inner, dict):
+                return inner
+
+    return plain
+
+
+def _unwrap_estados_container(plain: dict[str, Any]) -> dict[str, Any]:
+    """consultarEstadosResponse → Estados (lista de Estado bajo Estado/estado)."""
+    if not isinstance(plain, dict):
+        return plain
+
+    if plain.get("Estado") is not None or plain.get("estado") is not None:
+        return plain
+
+    for key in ("Estados", "estados"):
+        inner = plain.get(key)
+        if isinstance(inner, dict):
+            return inner
+
+    outer = plain.get("consultarEstadosResponse")
+    if isinstance(outer, dict):
+        for key in ("Estados", "estados"):
+            inner = outer.get(key)
+            if isinstance(inner, dict):
+                return inner
+        return outer
+
+    return plain
+
+
 def _extract_items_list(items_node: Any) -> list[dict[str, Any]]:
     """items puede ser dict con clave ComunicacionSimplificada o lista directa."""
     plain = to_plain(items_node)
@@ -53,6 +134,8 @@ def normalize_consultar_comunicaciones_response(result: Any) -> dict[str, Any]:
     plain = to_plain(result)
     if not isinstance(plain, dict):
         plain = {}
+
+    plain = _unwrap_respuesta_paginada(plain)
 
     items_raw = plain.get("items") or plain.get("Items")
     rows = _extract_items_list(items_raw)
@@ -138,6 +221,8 @@ def normalize_comunicacion_detalle(result: Any, *, include_adjunto_base64: bool 
     if not isinstance(d, dict):
         d = {}
 
+    d = _unwrap_comunicacion(d)
+
     adjuntos_raw = _extract_adjuntos_list(d.get("adjuntos") or d.get("Adjuntos"))
     adjuntos = [_normalize_adjunto(a, include_adjunto_base64) for a in adjuntos_raw]
 
@@ -176,6 +261,7 @@ def normalize_estados_response(result: Any) -> dict[str, Any]:
     plain = to_plain(result)
     if not isinstance(plain, dict):
         plain = {}
+    plain = _unwrap_estados_container(plain)
     estados: list[dict[str, Any]] = []
     raw_list = plain.get("Estado") or plain.get("estado")
     if isinstance(raw_list, list):
