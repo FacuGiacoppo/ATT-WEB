@@ -344,11 +344,16 @@ async function openDetail(idComunicacion, cuitFromRow) {
 
   const incluirAdjuntos = true;
   try {
+    console.log(
+      "[DFE] POST /api/dfe/comunicacion-detalle",
+      JSON.stringify({ cuitRepresentada: cuit, idComunicacion: idNum, incluirAdjuntos })
+    );
     const res = await apiPostComunicacionDetalle({
       cuitRepresentada: cuit,
       idComunicacion: idNum,
       incluirAdjuntos,
     });
+    console.log("[DFE] /api/dfe/comunicacion-detalle response", res);
     closeDetailModal();
     if (!res.ok || !res.data) {
       setError(userMessageFromResponse(res));

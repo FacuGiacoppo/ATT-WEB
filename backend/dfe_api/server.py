@@ -51,6 +51,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 from dfe_service import DfeServiceError, consumir_comunicacion, consultar_comunicaciones, consultar_estados, health_check
+from sanitize import sanitize
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -72,9 +73,9 @@ def _err_payload(exc: DfeServiceError) -> tuple[dict, int]:
 def route_health():
     try:
         body = health_check()
-        return jsonify({"ok": bool(body.get("configPresent")), **body})
+        return jsonify(sanitize({"ok": bool(body.get("configPresent")), **body}))
     except Exception as e:
-        return jsonify({"ok": False, "error": "health", "message": str(e)}), 500
+        return jsonify(sanitize({"ok": False, "error": "health", "message": str(e)})), 500
 
 
 @app.get("/api/dfe/estados")
@@ -84,13 +85,13 @@ def route_estados():
         return jsonify({"ok": False, "error": "parametros", "message": "Falta query cuitRepresentada"}), 400
     try:
         data = consultar_estados(cuit)
-        return jsonify({"ok": True, "data": data})
+        return jsonify(sanitize({"ok": True, "data": data}))
     except DfeServiceError as e:
         p, st = _err_payload(e)
-        return jsonify(p), st
+        return jsonify(sanitize(p)), st
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"ok": False, "error": "interno", "message": str(e)}), 500
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
 
 
 @app.post("/api/dfe/comunicaciones")
@@ -113,13 +114,13 @@ def route_comunicaciones():
         return jsonify({"ok": False, "error": "parametros", "message": "Falta cuitRepresentada"}), 400
     try:
         data = consultar_comunicaciones(cuit, fd, fh, pagina, rpp)
-        return jsonify({"ok": True, "data": data})
+        return jsonify(sanitize({"ok": True, "data": data}))
     except DfeServiceError as e:
         p, st = _err_payload(e)
-        return jsonify(p), st
+        return jsonify(sanitize(p)), st
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"ok": False, "error": "interno", "message": str(e)}), 500
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
 
 
 @app.post("/api/dfe/comunicacion-detalle")
@@ -137,13 +138,13 @@ def route_detalle():
         return jsonify({"ok": False, "error": "parametros", "message": "Falta cuitRepresentada"}), 400
     try:
         data = consumir_comunicacion(cuit, id_com, bool(inc))
-        return jsonify({"ok": True, "data": data})
+        return jsonify(sanitize({"ok": True, "data": data}))
     except DfeServiceError as e:
         p, st = _err_payload(e)
-        return jsonify(p), st
+        return jsonify(sanitize(p)), st
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"ok": False, "error": "interno", "message": str(e)}), 500
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
 
 
 if __name__ == "__main__":
