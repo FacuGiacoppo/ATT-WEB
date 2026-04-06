@@ -24,12 +24,11 @@ for p in (str(_API_DIR), str(_ARCA_PKG_PARENT)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-# Cargar .env del conector si existe (no sobreescribe variables ya definidas)
-def _load_dotenv_connector() -> None:
-    env_path = _ARCA_PKG_PARENT / ".env"
-    if not env_path.is_file():
+def _load_dotenv(path: Path) -> None:
+    """Carga KEY=VALUE desde un archivo .env (no sobreescribe variables ya definidas)."""
+    if not path.is_file():
         return
-    with open(env_path, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -40,7 +39,8 @@ def _load_dotenv_connector() -> None:
                 os.environ[k] = v
 
 
-_load_dotenv_connector()
+_load_dotenv(_API_DIR / ".env")
+_load_dotenv(_ARCA_PKG_PARENT / ".env")
 
 # Homologación / producción: defaults de WSAA y WSDL antes de importar dfe_service
 from arca_runtime_env import ensure_arca_runtime_env

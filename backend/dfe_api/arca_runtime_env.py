@@ -72,11 +72,30 @@ def ensure_arca_runtime_env() -> None:
     env = normalized_arca_env()
     os.environ["ARCA_ENV_RESOLVED"] = env
 
-    if not _nonempty("ARCA_WSAA_URL"):
+    # Si el usuario definió URLs específicas por entorno, tienen prioridad.
+    # Esto permite operar prod/homo sin editar ARCA_WSAA_URL / ARCA_VE_WSDL globales.
+    if env == "produccion":
+        wsaa_env = os.environ.get("ARCA_WSAA_URL_PRODUCCION")
+        wsdl_env = os.environ.get("ARCA_VE_WSDL_PRODUCCION")
+    else:
+        wsaa_env = os.environ.get("ARCA_WSAA_URL_HOMOLOGACION") or os.environ.get("ARCA_WSAA_URL_HOMO")
+        wsdl_env = os.environ.get("ARCA_VE_WSDL_HOMOLOGACION") or os.environ.get("ARCA_VE_WSDL_HOMO")
+    if wsaa_env and str(wsaa_env).strip():
+        os.environ["ARCA_WSAA_URL"] = str(wsaa_env).strip()
+    if wsdl_env and str(wsdl_env).strip():
+        os.environ["ARCA_VE_WSDL"] = str(wsdl_env).strip()
+
+    # Defaults según entorno: si faltan, se rellenan. Si estamos en producción y
+    # quedaron seteadas URLs de homologación (p.ej. heredadas del shell), se corrigen.
+    if not _nonempty("ARCA_WSAA_URL") or (
+        env == "produccion" and os.environ.get("ARCA_WSAA_URL") == _DEFAULT_WSAA_HOMOLOGACION
+    ):
         os.environ["ARCA_WSAA_URL"] = (
             _DEFAULT_WSAA_HOMOLOGACION if env == "homologacion" else _DEFAULT_WSAA_PRODUCCION
         )
-    if not _nonempty("ARCA_VE_WSDL"):
+    if not _nonempty("ARCA_VE_WSDL") or (
+        env == "produccion" and os.environ.get("ARCA_VE_WSDL") == _DEFAULT_WSDL_HOMOLOGACION
+    ):
         os.environ["ARCA_VE_WSDL"] = (
             _DEFAULT_WSDL_HOMOLOGACION if env == "homologacion" else _DEFAULT_WSDL_PRODUCCION
         )
