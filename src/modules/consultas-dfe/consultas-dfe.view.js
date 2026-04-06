@@ -16,6 +16,14 @@ export function renderConsultasDfeView() {
         </div>
       </header>
 
+      <details class="dfe-guide is-hidden" id="dfe-superadmin-guide">
+        <summary class="dfe-guide-summary">
+          <span class="dfe-guide-title">Guía interna (solo superadmin)</span>
+          <span class="dfe-guide-sub">Instructivo de delegación</span>
+        </summary>
+        <div class="dfe-guide-body" id="dfe-superadmin-guide-body"></div>
+      </details>
+
       <div class="dfe-card dfe-form-card">
         <form class="dfe-form" id="dfe-form" autocomplete="off">
           <div class="dfe-form-grid">

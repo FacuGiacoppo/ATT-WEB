@@ -21,6 +21,130 @@
   margin-bottom: 20px;
 }
 
+.dfe-guide {
+  background: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(26, 26, 46, 0.08);
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.dfe-guide-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  background: var(--paper-warm);
+  border-bottom: 1px solid rgba(26, 26, 46, 0.06);
+}
+
+.dfe-guide-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dfe-guide-title {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.dfe-guide-sub {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.dfe-guide-body {
+  padding: 18px;
+}
+
+.dfe-guide-main {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.dfe-guide-section {
+  margin: 14px 0;
+}
+
+.dfe-guide-h {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.dfe-guide-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  line-height: 1.6;
+}
+
+.dfe-guide-li {
+  margin: 6px 0;
+}
+
+.dfe-guide-callout {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(26, 26, 46, 0.08);
+  background: rgba(26, 26, 46, 0.03);
+}
+
+.dfe-guide-callout--warn {
+  border-color: rgba(201, 168, 76, 0.35);
+  background: rgba(201, 168, 76, 0.14);
+}
+
+.dfe-guide-callout-title {
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.dfe-guide-callout-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-light);
+}
+
+.dfe-guide-code {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 12px;
+  background: #1a1a2e;
+  color: #e8e8f0;
+  border-radius: var(--radius);
+  overflow: auto;
+}
+
+.dfe-guide-checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.dfe-guide-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.dfe-guide-check input {
+  width: 16px;
+  height: 16px;
+}
+
 .dfe-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

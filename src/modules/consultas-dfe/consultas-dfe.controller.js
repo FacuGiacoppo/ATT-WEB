@@ -1,6 +1,8 @@
 import { renderConsultasDfeView } from "./consultas-dfe.view.js";
 import { explainDfeFetchFailure } from "../../config/dfe-api.js";
 import { apiGetHealth, apiPostComunicaciones, apiPostComunicacionDetalle } from "./dfe.service.js";
+import { appState } from "../../app/state.js";
+import { DELEGACION_GUIDE } from "./delegacion-guide.js";
 
 export { renderConsultasDfeView };
 
@@ -561,9 +563,74 @@ async function openDetail(idComunicacion, cuitFromRow) {
   }
 }
 
+function renderDelegacionGuideHtml() {
+  const esc = escHtml;
+  const guide = DELEGACION_GUIDE;
+
+  const sectionHtml = (s) => {
+    const list = (s.items || [])
+      .map((it) => `<li class="dfe-guide-li">${esc(it)}</li>`)
+      .join("");
+    const listTag = s.ordered ? "ol" : "ul";
+    const listBlock = list ? `<${listTag} class="dfe-guide-list">${list}</${listTag}>` : "";
+
+    const callout = s.callout
+      ? `<div class="dfe-guide-callout dfe-guide-callout--${esc(s.callout.kind || "info")}">
+          <div class="dfe-guide-callout-title">${esc(s.callout.title || "Nota")}</div>
+          <div class="dfe-guide-callout-text">${esc(s.callout.text || "")}</div>
+        </div>`
+      : "";
+
+    const code = Array.isArray(s.code) && s.code.length
+      ? `<pre class="dfe-guide-code">${esc(s.code.join("\n"))}</pre>`
+      : "";
+
+    return `
+      <section class="dfe-guide-section">
+        <h3 class="dfe-guide-h">${esc(s.title)}</h3>
+        ${listBlock}
+        ${callout}
+        ${code}
+      </section>
+    `;
+  };
+
+  const checklist = (guide.checklist || [])
+    .map((t) => {
+      const id = `dfe-chk-${t.toLowerCase().replaceAll(" ", "-").replaceAll(".", "")}`;
+      return `
+        <label class="dfe-guide-check" for="${esc(id)}">
+          <input type="checkbox" id="${esc(id)}" />
+          <span>${esc(t)}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="dfe-guide-inner">
+      <h2 class="dfe-guide-main">${esc(guide.title)}</h2>
+      ${(guide.sections || []).map(sectionHtml).join("")}
+      <section class="dfe-guide-section">
+        <h3 class="dfe-guide-h">Checklist</h3>
+        <div class="dfe-guide-checklist">${checklist}</div>
+      </section>
+    </div>
+  `;
+}
+
 export async function initConsultasDfePage() {
   const root = document.getElementById("dfe-root");
   if (!root) return;
+
+  // Guía interna solo superadmin (no afecta permisos del módulo dfe).
+  const isSuperadmin = appState.session.user?.role === "superadmin";
+  const guide = document.getElementById("dfe-superadmin-guide");
+  const guideBody = document.getElementById("dfe-superadmin-guide-body");
+  if (guide && guideBody && isSuperadmin) {
+    guideBody.innerHTML = renderDelegacionGuideHtml();
+    guide.classList.remove("is-hidden");
+  }
 
   try {
     const h = await apiGetHealth();
