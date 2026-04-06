@@ -6,7 +6,7 @@ export { renderConsultasDfeView };
 
 const DEMO = {
   cuitRepresentada: "20279722796",
-  fechaDesde: "2026-01-01",
+  fechaDesde: "2025-04-12",
   fechaHasta: "2026-04-05",
   pagina: 1,
   resultadosPorPagina: 10,
@@ -68,6 +68,10 @@ function userMessageFromResponse(res) {
     return `Autenticación / certificado (WSAA): ${res.message || "Error al obtener ticket de acceso."}`;
   }
   if (res.error === "soap_fault") {
+    const min = extractMinFechaDesde(res.message || "");
+    if (min) {
+      return `AFIP limita la consulta. La fecha mínima soportada para este caso es: ${min}.`;
+    }
     return `Respuesta AFIP: ${res.message || "Fault SOAP"}`;
   }
   if (res.status >= 500 || res.error === "interno") {
@@ -77,6 +81,15 @@ function userMessageFromResponse(res) {
     return res.message || `Error (${res.status || "red"}).`;
   }
   return res.message || "Error desconocido.";
+}
+
+function extractMinFechaDesde(message) {
+  const s = String(message || "");
+  if (!s) return null;
+  // Ej: "Error 101: Fecha desde no soportada. Mínima fecha [2025-04-11]"
+  const m = s.match(/\bM[íi]nima fecha\s*\[([0-9]{4}-[0-9]{2}-[0-9]{2})\]/i);
+  if (m?.[1]) return m[1];
+  return null;
 }
 
 function fmtDatePair(pub, notif) {
@@ -177,6 +190,18 @@ async function runConsultar(extra) {
   try {
     const res = await apiPostComunicaciones(payload);
     if (!res.ok || !res.data) {
+      // UX: Error 101 de AFIP → sugerir/autocorregir fecha mínima.
+      if (res.error === "soap_fault") {
+        const min = extractMinFechaDesde(res.message || "");
+        if (min) {
+          const fdEl = document.getElementById("dfe-fecha-desde");
+          const cur = payload.fechaDesde || "";
+          if (/^\d{4}-\d{2}-\d{2}$/.test(min) && /^\d{4}-\d{2}-\d{2}$/.test(cur) && cur < min) {
+            if (fdEl) fdEl.value = min; // autocompleta a la mínima soportada
+            payload.fechaDesde = min;
+          }
+        }
+      }
       setError(userMessageFromResponse(res));
       showEl(wrap, false);
       return;

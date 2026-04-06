@@ -25,7 +25,7 @@ export function renderConsultasDfeView() {
             </label>
             <label class="dfe-field">
               <span class="dfe-label">Fecha desde</span>
-              <input type="date" id="dfe-fecha-desde" name="fechaDesde" value="2026-01-01" />
+              <input type="date" id="dfe-fecha-desde" name="fechaDesde" value="2025-04-12" />
             </label>
             <label class="dfe-field">
               <span class="dfe-label">Fecha hasta</span>
