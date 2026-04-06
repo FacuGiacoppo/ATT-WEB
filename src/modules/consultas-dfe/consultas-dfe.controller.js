@@ -387,6 +387,52 @@ function renderDetailModal(data, { incluirAdjuntos }) {
     return bytes;
   }
 
+  function decodeTextAttachment(base64Content, filename) {
+    const bytes = base64ToBytes(base64Content);
+
+    const candidates = [
+      { enc: "utf-8", label: "UTF-8" },
+      { enc: "windows-1252", label: "Windows-1252" },
+      { enc: "iso-8859-1", label: "ISO-8859-1" },
+    ];
+
+    const scoreText = (text) => {
+      if (text == null) return Number.POSITIVE_INFINITY;
+      const s = String(text);
+      // Preferir menos caracteres de reemplazo (�).
+      const repl = (s.match(/\uFFFD/g) || []).length;
+      // Penalizar controles raros (sin contar CR/LF/TAB).
+      let ctrl = 0;
+      for (let i = 0; i < s.length; i += 1) {
+        const c = s.charCodeAt(i);
+        if (c === 9 || c === 10 || c === 13) continue;
+        if (c < 32) ctrl += 1;
+      }
+      return repl * 1000 + ctrl;
+    };
+
+    let best = { text: null, enc: "utf-8", label: "UTF-8", score: Number.POSITIVE_INFINITY };
+    for (const c of candidates) {
+      try {
+        const dec = new TextDecoder(c.enc, { fatal: false });
+        let text = dec.decode(bytes);
+        // Strip BOM si existiera
+        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+        const sc = scoreText(text);
+        if (sc < best.score) best = { text, enc: c.enc, label: c.label, score: sc };
+      } catch (e) {
+        // si el navegador no soporta el encoding, lo salteamos
+      }
+    }
+
+    return {
+      text: best.text ?? "",
+      encodingUsed: best.label,
+      bytes,
+      filename: filename || "adjunto.txt",
+    };
+  }
+
   function downloadAttachment(a) {
     const name = a?.filename || "adjunto.bin";
     const b64 = a?.contentBase64;
@@ -394,8 +440,18 @@ function renderDetailModal(data, { incluirAdjuntos }) {
       setError("El adjunto no está disponible para descarga (contenido omitido en la API).");
       return;
     }
-    const bytes = base64ToBytes(b64);
-    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const isTxt = /\.txt$/i.test(name);
+    let blob;
+    if (isTxt) {
+      // Re-generar el archivo como UTF-8 para que se vea bien al abrirlo.
+      const decoded = decodeTextAttachment(b64, name);
+      const enc = new TextEncoder(); // UTF-8
+      const utf8 = enc.encode(decoded.text);
+      blob = new Blob([utf8], { type: "text/plain;charset=utf-8" });
+    } else {
+      const bytes = base64ToBytes(b64);
+      blob = new Blob([bytes], { type: "application/octet-stream" });
+    }
     const url = URL.createObjectURL(blob);
     const aTag = document.createElement("a");
     aTag.href = url;
@@ -421,10 +477,12 @@ function renderDetailModal(data, { incluirAdjuntos }) {
       return;
     }
     try {
-      const bytes = base64ToBytes(b64);
-      const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      const decoded = decodeTextAttachment(b64, a?.filename || "adjunto.txt");
+      const text = decoded.text;
       const clipped = text.length > 12000 ? text.slice(0, 12000) + "\n\n…(recortado)" : text;
-      box.innerHTML = `<pre class="dfe-msg-pre">${escHtml(clipped)}</pre>`;
+      box.innerHTML =
+        `<div class="dfe-muted" style="margin:0 0 10px;font-size:12px">Encoding detectado: ${escHtml(decoded.encodingUsed)}</div>` +
+        `<pre class="dfe-msg-pre">${escHtml(clipped)}</pre>`;
       box.classList.remove("is-hidden");
     } catch (err) {
       console.error("preview txt:", err);
