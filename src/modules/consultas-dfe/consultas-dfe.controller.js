@@ -337,25 +337,6 @@ function computeAttState(trk) {
   return "new";
 }
 
-function escHtml(v) {
-  return String(v ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll('"', "&quot;");
-}
-
-function onlyDigits(s) {
-  return String(s ?? "").replace(/\D/g, "");
-}
-
-function rowHasAdjuntos(r) {
-  return Boolean(r?.tieneAdjuntos);
-}
-
-function hasInternalNote(trk) {
-  return Boolean(trk?.internalNote && String(trk.internalNote).trim().length);
-}
-
 function paintInboxMeta() {
   const el = document.getElementById("dfe-inbox-meta");
   if (!el) return;
