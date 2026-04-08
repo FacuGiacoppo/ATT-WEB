@@ -73,6 +73,13 @@ def _allowed_roles() -> set[str]:
     # Default: mismos roles “colaborativos” del frontend
     return {"superadmin", "admin", "colaborador"}
 
+def _sync_roles() -> set[str]:
+    raw = (os.environ.get("DFE_SYNC_ROLES") or "").strip()
+    if raw:
+        return {r.strip() for r in raw.split(",") if r.strip()}
+    # Default: solo admin/superadmin pueden disparar sync manual.
+    return {"superadmin", "admin"}
+
 
 def _get_bearer_token() -> str | None:
     h = (request.headers.get("Authorization") or "").strip()
@@ -201,6 +208,96 @@ def route_estados():
     try:
         data = consultar_estados(cuit)
         return jsonify(sanitize({"ok": True, "data": data}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+def _fs_client():
+    from google.cloud import firestore  # type: ignore
+
+    return firestore.Client()
+
+
+@app.post("/api/dfe/sync")
+def route_sync_all():
+    """Sync manual masivo: recorre dfe_clients habilitados y persiste dfe_comunicaciones."""
+    u = getattr(request, "att_user", None) or {}
+    if (u.get("role") or "") not in _sync_roles():
+        return jsonify({"ok": False, "error": "forbidden", "message": "Sin permiso para sincronizar."}), 403
+    try:
+        from sync_service import list_enabled_clients, sync_cuit_into_firestore
+
+        db = _fs_client()
+        clients = list_enabled_clients(db=db)
+        results = []
+        for c in clients:
+            # status por cliente
+            ref = db.collection("dfe_clients").document(c["cuit"])
+            try:
+                r = sync_cuit_into_firestore(db=db, cuit_representada=c["cuit"], nombre_cliente=c.get("nombre"))
+                results.append({"ok": True, **r})
+                ref.set(
+                    {
+                        "cuit": c["cuit"],
+                        "nombre": c.get("nombre"),
+                        "dfeEnabled": True,
+                        "active": True,
+                        "lastSyncAt": db.SERVER_TIMESTAMP,
+                        "lastSyncOk": True,
+                        "lastSyncError": None,
+                    },
+                    merge=True,
+                )
+            except Exception as e:
+                results.append({"ok": False, "cuitRepresentada": c["cuit"], "message": str(e)})
+                ref.set(
+                    {
+                        "lastSyncAt": db.SERVER_TIMESTAMP,
+                        "lastSyncOk": False,
+                        "lastSyncError": str(e)[:400],
+                    },
+                    merge=True,
+                )
+        return jsonify({"ok": True, "count": len(results), "results": sanitize(results)})
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/sync-client")
+def route_sync_client():
+    """Sync manual por CUIT: body { cuitRepresentada, nombreCliente? }."""
+    u = getattr(request, "att_user", None) or {}
+    if (u.get("role") or "") not in _sync_roles():
+        return jsonify({"ok": False, "error": "forbidden", "message": "Sin permiso para sincronizar."}), 403
+    body = request.get_json(silent=True) or {}
+    cuit = (body.get("cuitRepresentada") or "").strip()
+    nombre = (body.get("nombreCliente") or "").strip() or None
+    try:
+        from sync_service import sync_cuit_into_firestore
+
+        db = _fs_client()
+        r = sync_cuit_into_firestore(db=db, cuit_representada=cuit, nombre_cliente=nombre)
+        db.collection("dfe_clients").document(r["cuitRepresentada"]).set(
+            {
+                "cuit": r["cuitRepresentada"],
+                "nombre": nombre,
+                "dfeEnabled": True,
+                "active": True,
+                "lastSyncAt": db.SERVER_TIMESTAMP,
+                "lastSyncOk": True,
+                "lastSyncError": None,
+            },
+            merge=True,
+        )
+        return jsonify(sanitize({"ok": True, "result": r}))
     except DfeServiceError as e:
         p, st = _err_payload(e)
         return jsonify(sanitize(p)), st

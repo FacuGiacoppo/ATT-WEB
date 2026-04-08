@@ -1,6 +1,11 @@
 import { renderConsultasDfeView } from "./consultas-dfe.view.js";
 import { explainDfeFetchFailure } from "../../config/dfe-api.js";
-import { apiGetHealth, apiPostComunicaciones, apiPostComunicacionDetalle } from "./dfe.service.js";
+import {
+  apiGetHealth,
+  apiPostComunicaciones,
+  apiPostComunicacionDetalle,
+  apiPostSyncAll,
+} from "./dfe.service.js";
 import { appState } from "../../app/state.js";
 import { DELEGACION_GUIDE } from "./delegacion-guide.js";
 import {
@@ -15,6 +20,17 @@ import {
   CollabWriteConflictError,
   timestampToMillis,
 } from "../../services/collaboration/collaboration.service.js";
+
+import {
+  collection,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  where,
+} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
+import { db } from "../../config/firebase.js";
 
 export { renderConsultasDfeView };
 
@@ -167,6 +183,32 @@ function fmtBoolAdj(v) {
   return "—";
 }
 
+function rowHasAdjuntos(r) {
+  if (r?.tieneAdjuntos === true || r?.tieneAdjuntos === 1) return true;
+  const raw = r?.raw;
+  if (raw?.tieneAdjunto === true || raw?.tieneAdjunto === 1) return true;
+  return false;
+}
+
+function hasInternalNote(trk) {
+  return Boolean(trk?.internalNote && String(trk.internalNote).trim().length);
+}
+
+function formatFirestoreTsHuman(ts) {
+  if (ts == null) return "—";
+  if (typeof ts.toDate === "function") {
+    try {
+      return ts.toDate().toLocaleString();
+    } catch {
+      return "—";
+    }
+  }
+  if (typeof ts.seconds === "number") {
+    return new Date(ts.seconds * 1000).toLocaleString();
+  }
+  return "—";
+}
+
 function parseAfipDateToMs(s) {
   const t = String(s || "").trim();
   if (!t) return null;
@@ -201,13 +243,23 @@ function paintTable(rows, cuitRepresentada) {
       const attState = computeAttState(trk);
       const badgeHtml =
         attState === "new"
-          ? `<span class="dfe-badge dfe-badge--new">Nueva</span>`
+          ? `<span class="dfe-badge dfe-badge--new" title="Sin abrir en ATT-WEB">Nueva</span>`
           : attState === "managed"
-          ? `<span class="dfe-badge dfe-badge--managed">Gestionada</span>`
-          : `<span class="dfe-badge dfe-badge--viewed">Vista</span>`;
+          ? `<span class="dfe-badge dfe-badge--managed" title="Marcada en ATT-WEB">Gestionada</span>`
+          : `<span class="dfe-badge dfe-badge--viewed" title="Abierta en ATT-WEB">Vista</span>`;
       const trClass =
         attState === "new" ? "dfe-row--new" : attState === "managed" ? "dfe-row--managed" : "";
       const idAttr = encodeURIComponent(String(id));
+      const noteSig = hasInternalNote(trk)
+        ? `<span class="dfe-signal dfe-signal--note" title="Hay nota interna">Nota</span>`
+        : "";
+      const adjSig = rowHasAdjuntos(r)
+        ? `<span class="dfe-signal dfe-signal--adj" title="AFIP indica adjuntos">Adj.</span>`
+        : "";
+      const signalsHtml =
+        noteSig || adjSig
+          ? `<div class="dfe-signal-cell">${noteSig}${adjSig}</div>`
+          : `<span class="dfe-muted">—</span>`;
       return `
         <tr class="${trClass}">
           <td class="dfe-td-num">${escHtml(id)}</td>
@@ -215,9 +267,9 @@ function paintTable(rows, cuitRepresentada) {
           <td class="dfe-td-subject">${escHtml(r.asunto)}</td>
           <td>${escHtml(r.organismo)}</td>
           <td>${escHtml(r.clasificacion)}</td>
-          <td><span class="dfe-pill">${escHtml(r.estadoDescripcion || r.estado || "—")}</span></td>
-          <td>${badgeHtml}</td>
-          <td>${fmtBoolAdj(r.tieneAdjuntos)}</td>
+          <td><span class="dfe-pill dfe-pill--afip" title="Estado en ARCA / AFIP">${escHtml(r.estadoDescripcion || r.estado || "—")}</span></td>
+          <td class="dfe-td-att">${badgeHtml}</td>
+          <td class="dfe-td-signals">${signalsHtml}</td>
           <td>
             <button type="button" class="btn-secondary dfe-btn-sm" data-dfe-detail="${idAttr}" data-dfe-cuit="${cuitAttr}">Ver detalle</button>
           </td>
@@ -265,7 +317,13 @@ let trackingById = {}; // { [idComunicacion]: trackingDoc|null }
 let lastPageRows = [];
 let lastCuit = "";
 let currentAttFilter = "all";
-let onlyNew = false;
+let filterWithNote = false;
+let filterWithAdjuntos = false;
+let inboxRows = [];
+let inboxFiltered = [];
+let inboxClientMap = new Map(); // cuit -> nombre
+let inboxSelectedClient = "";
+let inboxQ = "";
 
 function refreshDfeEmptyHomoHint() {
   const el = document.getElementById("dfe-empty-hint-homo");
@@ -279,8 +337,242 @@ function computeAttState(trk) {
   return "new";
 }
 
+function escHtml(v) {
+  return String(v ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll('"', "&quot;");
+}
+
+function onlyDigits(s) {
+  return String(s ?? "").replace(/\D/g, "");
+}
+
+function rowHasAdjuntos(r) {
+  return Boolean(r?.tieneAdjuntos);
+}
+
+function hasInternalNote(trk) {
+  return Boolean(trk?.internalNote && String(trk.internalNote).trim().length);
+}
+
+function paintInboxMeta() {
+  const el = document.getElementById("dfe-inbox-meta");
+  if (!el) return;
+  const total = inboxRows.length;
+  const shown = inboxFiltered.length;
+  const clients = new Set(inboxRows.map((r) => r.cuitRepresentada)).size;
+  el.textContent = shown === total
+    ? `${total} comunicaciones · ${clients} clientes`
+    : `${shown} visibles · ${total} totales · ${clients} clientes`;
+}
+
+function paintInboxClientsFilter() {
+  const sel = document.getElementById("dfe-filter-cliente");
+  if (!sel) return;
+  const prev = sel.value;
+  const entries = Array.from(inboxClientMap.entries()).sort((a, b) => String(a[1] || a[0]).localeCompare(String(b[1] || b[0])));
+  sel.innerHTML = `<option value="" ${prev === "" ? "selected" : ""}>Todos</option>` + entries
+    .map(([cuit, nombre]) => `<option value="${escHtml(cuit)}"${prev === cuit ? " selected" : ""}>${escHtml(nombre || cuit)}</option>`)
+    .join("");
+}
+
+function paintInboxTable() {
+  const tb = document.getElementById("dfe-inbox-body");
+  const empty = document.getElementById("dfe-inbox-empty");
+  if (!tb) return;
+  const rows = inboxFiltered;
+
+  if (!rows.length) {
+    tb.innerHTML = "";
+    if (empty) empty.classList.remove("is-hidden");
+    paintInboxMeta();
+    return;
+  }
+  if (empty) empty.classList.add("is-hidden");
+
+  tb.innerHTML = rows.map((r) => {
+    const id = r.idComunicacion;
+    const trk = trackingById[String(id)] || null;
+    const attState = computeAttState(trk);
+    const badgeHtml =
+      attState === "new"
+        ? `<span class="dfe-badge dfe-badge--new" title="Sin abrir en ATT-WEB">Nueva</span>`
+        : attState === "managed"
+        ? `<span class="dfe-badge dfe-badge--managed" title="Marcada en ATT-WEB">Gestionada</span>`
+        : `<span class="dfe-badge dfe-badge--viewed" title="Abierta en ATT-WEB">Vista</span>`;
+    const noteSig = hasInternalNote(trk)
+      ? `<span class="dfe-signal dfe-signal--note" title="Hay nota interna">Nota</span>`
+      : "";
+    const adjSig = rowHasAdjuntos(r)
+      ? `<span class="dfe-signal dfe-signal--adj" title="AFIP indica adjuntos">Adj.</span>`
+      : "";
+    const signalsHtml = noteSig || adjSig
+      ? `<div class="dfe-signal-cell">${noteSig}${adjSig}</div>`
+      : `<span class="dfe-muted">—</span>`;
+    const cuitAttr = escHtml(onlyDigits(r.cuitRepresentada));
+    const idAttr = encodeURIComponent(String(id));
+    const cliente = r.nombreCliente || r.cuitRepresentada;
+    const fecha = r.fechaPublicacion || r.fechaNotificacion || "—";
+    return `
+      <tr class="${attState === "new" ? "dfe-row--new" : attState === "managed" ? "dfe-row--managed" : ""}">
+        <td><strong>${escHtml(cliente)}</strong><div class="dfe-muted">${escHtml(r.cuitRepresentada)}</div></td>
+        <td>${escHtml(fecha)}</td>
+        <td class="dfe-td-subject">${escHtml(r.asunto)}</td>
+        <td>${escHtml(r.organismo)}</td>
+        <td>${escHtml(r.clasificacion || "—")}</td>
+        <td><span class="dfe-pill dfe-pill--afip">${escHtml(r.estadoAfipDescripcion || r.estadoAfip || "—")}</span></td>
+        <td class="dfe-td-att">${badgeHtml}</td>
+        <td class="dfe-td-signals">${signalsHtml}</td>
+        <td><button type="button" class="btn-secondary dfe-btn-sm" data-dfe-detail="${idAttr}" data-dfe-cuit="${cuitAttr}">Ver detalle</button></td>
+      </tr>
+    `;
+  }).join("");
+
+  paintInboxMeta();
+}
+
+function applyInboxFilters() {
+  const ql = (inboxQ || "").trim().toLowerCase();
+  inboxFiltered = (inboxRows || []).filter((r) => {
+    if (inboxSelectedClient && String(r.cuitRepresentada) !== String(inboxSelectedClient)) return false;
+    const trk = trackingById[String(r.idComunicacion)] || null;
+    const state = computeAttState(trk);
+    if (currentAttFilter && currentAttFilter !== "all" && state !== currentAttFilter) return false;
+    if (filterWithNote && !hasInternalNote(trk)) return false;
+    if (filterWithAdjuntos && !rowHasAdjuntos(r)) return false;
+    if (ql) {
+      const hay = [
+        r.nombreCliente,
+        r.cuitRepresentada,
+        r.asunto,
+        r.organismo,
+        r.clasificacion,
+        r.estadoAfipDescripcion,
+      ].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(ql)) return false;
+    }
+    return true;
+  });
+}
+
+async function loadInboxFromFirestore() {
+  // Últimas N (base mínima). A futuro: paginado/virtualización.
+  const q = query(collection(db, "dfe_comunicaciones"), orderBy("fechaPublicacionMs", "desc"), limit(500));
+  const snap = await getDocs(q);
+  const rows = [];
+  const cm = new Map();
+  snap.forEach((d) => {
+    const v = d.data() || {};
+    rows.push(v);
+    const c = String(v.cuitRepresentada || "");
+    if (c) cm.set(c, v.nombreCliente || c);
+  });
+  inboxRows = rows;
+  inboxClientMap = cm;
+
+  const ids = rows.map((r) => String(r.idComunicacion));
+  // Tracking ATT-WEB (att_collaboration) por idComunicacion (mantiene compatibilidad)
+  // Nota: getTrackingBatch requiere cuitRepresentada; para inbox multi-cuit lo hacemos por fila.
+  const out = {};
+  await Promise.all(
+    rows.map(async (r) => {
+      const id = String(r.idComunicacion);
+      out[id] = await getTracking(r.cuitRepresentada, r.idComunicacion).catch(() => null);
+    })
+  );
+  trackingById = out;
+  applyInboxFilters();
+  paintInboxClientsFilter();
+  paintInboxTable();
+}
+
+async function syncNow() {
+  setError("");
+  setLoading(true);
+  try {
+    const res = await apiPostSyncAll();
+    if (!res.ok) {
+      setError(res.message || "No se pudo sincronizar.");
+      return;
+    }
+    await loadInboxFromFirestore();
+  } catch (e) {
+    console.error(e);
+    setError(explainDfeFetchFailure());
+  } finally {
+    setLoading(false);
+  }
+}
+
+function bindInboxEvents() {
+  document.addEventListener("click", async (event) => {
+    const btnRefresh = event.target.closest("#dfe-inbox-refresh");
+    if (btnRefresh) {
+      await loadInboxFromFirestore();
+      return;
+    }
+    const btnSync = event.target.closest("#dfe-inbox-sync");
+    if (btnSync) {
+      await syncNow();
+      return;
+    }
+  });
+
+  const sel = document.getElementById("dfe-filter-cliente");
+  if (sel) {
+    sel.addEventListener("change", () => {
+      inboxSelectedClient = String(sel.value || "");
+      applyInboxFilters();
+      paintInboxTable();
+    });
+  }
+  const chkAdj = document.getElementById("dfe-filter-adj");
+  if (chkAdj) {
+    chkAdj.addEventListener("change", () => {
+      filterWithAdjuntos = Boolean(chkAdj.checked);
+      applyInboxFilters();
+      paintInboxTable();
+    });
+  }
+  const chkNote = document.getElementById("dfe-filter-note");
+  if (chkNote) {
+    chkNote.addEventListener("change", () => {
+      filterWithNote = Boolean(chkNote.checked);
+      applyInboxFilters();
+      paintInboxTable();
+    });
+  }
+  const selAtt = document.getElementById("dfe-att-state");
+  if (selAtt) {
+    selAtt.addEventListener("change", () => {
+      currentAttFilter = String(selAtt.value || "all");
+      applyInboxFilters();
+      paintInboxTable();
+    });
+  }
+  const q = document.getElementById("dfe-filter-q");
+  if (q) {
+    q.addEventListener("input", () => {
+      inboxQ = String(q.value || "");
+      applyInboxFilters();
+      paintInboxTable();
+    });
+  }
+}
+function buildAttBadgeModalHtml(attState) {
+  if (attState === "managed") {
+    return `<span class="dfe-badge dfe-badge--managed">Gestionada en ATT-WEB</span>`;
+  }
+  if (attState === "viewed") {
+    return `<span class="dfe-badge dfe-badge--viewed">Vista en ATT-WEB</span>`;
+  }
+  return `<span class="dfe-badge dfe-badge--new">Nueva en ATT-WEB</span>`;
+}
+
 function paintKpisAndFilters() {
   const kpis = document.getElementById("dfe-kpis");
+  const hint = document.getElementById("dfe-kpis-hint");
   const filters = document.getElementById("dfe-results-filters");
   const rows = lastPageRows || [];
   if (kpis) {
@@ -288,23 +580,46 @@ function paintKpisAndFilters() {
     const nNew = states.filter((s) => s === "new").length;
     const nViewed = states.filter((s) => s === "viewed").length;
     const nManaged = states.filter((s) => s === "managed").length;
+    const nAdj = rows.filter((r) => rowHasAdjuntos(r)).length;
+    const nNote = rows.filter((r) => hasInternalNote(trackingById[String(r.idComunicacion)])).length;
     kpis.innerHTML = `
-      <span class="dfe-kpi">${nNew} nuevas</span>
-      <span class="dfe-kpi">${nViewed} vistas</span>
-      <span class="dfe-kpi">${nManaged} gestionadas</span>
+      <span class="dfe-kpi dfe-kpi--new">${nNew} nuevas</span>
+      <span class="dfe-kpi dfe-kpi--viewed">${nViewed} vistas</span>
+      <span class="dfe-kpi dfe-kpi--managed">${nManaged} gestionadas</span>
+      <span class="dfe-kpi dfe-kpi--adj">${nAdj} con adjuntos</span>
+      <span class="dfe-kpi dfe-kpi--note">${nNote} con nota</span>
+      <span class="dfe-kpi dfe-kpi--page">${rows.length} en esta página</span>
+      <span class="dfe-kpi dfe-kpi--total">Total consulta: ${lastTotalItems || rows.length}</span>
     `;
     showEl(kpis, rows.length > 0);
+  }
+  if (hint) {
+    if (rows.length > 0) {
+      const filtered = getFilteredRows(rows);
+      const filterActive =
+        filterWithNote || filterWithAdjuntos || (currentAttFilter && currentAttFilter !== "all");
+      const base = `Resumen sobre los ${rows.length} ítems de esta página. Total consulta AFIP: ${lastTotalItems || rows.length} comunicaciones (todas las páginas).`;
+      hint.textContent = filterActive
+        ? `${base} Tras filtros ATT-WEB: se muestran ${filtered.length} filas.`
+        : base;
+    } else {
+      hint.textContent = "";
+    }
+    showEl(hint, rows.length > 0);
   }
   if (filters) showEl(filters, rows.length > 0);
 }
 
 function getFilteredRows(rows) {
   let out = Array.isArray(rows) ? rows : [];
-  if (onlyNew) {
-    out = out.filter((r) => computeAttState(trackingById[String(r.idComunicacion)]) === "new");
-  }
   if (currentAttFilter && currentAttFilter !== "all") {
     out = out.filter((r) => computeAttState(trackingById[String(r.idComunicacion)]) === currentAttFilter);
+  }
+  if (filterWithNote) {
+    out = out.filter((r) => hasInternalNote(trackingById[String(r.idComunicacion)]));
+  }
+  if (filterWithAdjuntos) {
+    out = out.filter((r) => rowHasAdjuntos(r));
   }
   return out;
 }
@@ -473,13 +788,18 @@ function renderDetailModal(data, options = {}) {
   const rawJson = JSON.stringify(data.raw ?? data, null, 2);
   const trk = trackingById[String(data.idComunicacion)] || null;
   const attState = computeAttState(trk);
-  const attBadge =
-    attState === "new"
-      ? `<span class="dfe-badge dfe-badge--new">Nueva</span>`
-      : attState === "managed"
-      ? `<span class="dfe-badge dfe-badge--managed">Gestionada</span>`
-      : `<span class="dfe-badge dfe-badge--viewed">Vista</span>`;
+  const attBadge = buildAttBadgeModalHtml(attState);
   const note = trk?.internalNote ? escHtml(trk.internalNote) : "";
+  const leidaArca =
+    data.leida === true ||
+    data.leida === 1 ||
+    /leída/i.test(String(data.estadoDescripcion || data.estado || ""));
+  const arcaReadPill = leidaArca
+    ? `<span class="dfe-pill dfe-pill--arca-yes">Leída en ARCA</span>`
+    : `<span class="dfe-pill dfe-pill--arca-no">Pendiente / no leída en ARCA</span>`;
+  const managedLine = trk?.managed
+    ? `<strong>Sí</strong> · ${escHtml(trk.managedBy || "—")} · ${escHtml(formatFirestoreTsHuman(trk.managedAt))}`
+    : "<span class=\"dfe-muted\">No</span>";
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -491,29 +811,29 @@ function renderDetailModal(data, options = {}) {
         <button type="button" class="modal-close" data-dfe-close-detail aria-label="Cerrar">✕</button>
       </div>
       <div class="modal-body dfe-detail-body">
-        <dl class="dfe-dl">
-          <dt>ID</dt><dd>${escHtml(data.idComunicacion)}</dd>
-          <dt>Organismo</dt><dd>${escHtml(data.organismo)}</dd>
-          <dt>Clasificación</dt><dd>${escHtml(data.clasificacion)}</dd>
-          <dt>Publicación</dt><dd>${escHtml(data.fechaPublicacion)}</dd>
-          <dt>Notificación</dt><dd>${escHtml(data.fechaNotificacion)}</dd>
-          <dt>Lectura</dt><dd>${escHtml(data.fechaLectura)}</dd>
-          <dt>Estado</dt><dd data-dfe-estado-att>${escHtml(data.estadoDescripcion || data.estado)} ${attBadge}</dd>
-        </dl>
-        <div class="dfe-detail-block">
-          <h4 class="dfe-detail-h">Contenido</h4>
-          <div class="dfe-detail-content">${
-            bodyText
-              ? `<pre class="dfe-msg-pre">${escHtml(bodyText)}</pre>`
-              : "<p class=\"dfe-muted\">Sin texto de cuerpo en la respuesta.</p>"
-          }</div>
+        <div class="dfe-detail-panel dfe-detail-panel--afip">
+          <h4 class="dfe-detail-panel-title">ARCA / AFIP</h4>
+          <p class="dfe-panel-lead">${arcaReadPill}<span class="dfe-muted"> · Estado: ${escHtml(data.estadoDescripcion || data.estado || "—")}</span></p>
+          <dl class="dfe-dl dfe-dl--panel">
+            <dt>ID</dt><dd>${escHtml(data.idComunicacion)}</dd>
+            <dt>Organismo</dt><dd>${escHtml(data.organismo)}</dd>
+            <dt>Clasificación</dt><dd>${escHtml(data.clasificacion)}</dd>
+            <dt>Publicación</dt><dd>${escHtml(data.fechaPublicacion)}</dd>
+            <dt>Notificación</dt><dd>${escHtml(data.fechaNotificacion)}</dd>
+            <dt>Fecha lectura (AFIP)</dt><dd>${escHtml(data.fechaLectura)}</dd>
+          </dl>
         </div>
-        <div class="dfe-detail-block">
-          <h4 class="dfe-detail-h">Adjuntos ${incluirAdjuntos ? "(solicitados al servicio)" : ""}</h4>
-          ${adjBlock}
-        </div>
-        <div class="dfe-detail-block">
-          <h4 class="dfe-detail-h">Gestión interna (ATT-WEB)</h4>
+
+        <div class="dfe-detail-panel dfe-detail-panel--att">
+          <h4 class="dfe-detail-panel-title">Seguimiento ATT-WEB</h4>
+          <div class="dfe-att-summary" data-dfe-att-summary>
+            <p class="dfe-att-summary-line"><span class="dfe-muted">Estado en la app:</span> <span data-dfe-att-badge-wrap>${attBadge}</span></p>
+            <ul class="dfe-att-facts">
+              <li><span class="dfe-att-facts-k">Última vista en ATT-WEB</span> <span class="dfe-att-facts-v" data-dfe-fact-lastview>${escHtml(trk?.lastViewedBy || "—")} · ${escHtml(formatFirestoreTsHuman(trk?.lastViewedAt))}</span></li>
+              <li><span class="dfe-att-facts-k">Primera vista</span> <span class="dfe-att-facts-v" data-dfe-fact-firstview>${escHtml(trk?.firstViewedBy || "—")} · ${escHtml(formatFirestoreTsHuman(trk?.firstViewedAt))}</span></li>
+              <li><span class="dfe-att-facts-k">Gestionada</span> <span class="dfe-att-facts-v" data-dfe-managed-line>${managedLine}</span></li>
+            </ul>
+          </div>
           <p class="dfe-collab-status is-hidden" id="dfe-collab-status" role="status" aria-live="polite"></p>
           <div class="dfe-internal">
             <div class="dfe-internal-row">
@@ -523,28 +843,31 @@ function renderDetailModal(data, options = {}) {
             </div>
             <div class="dfe-internal-row">
               <label class="dfe-field" style="margin:0">
-                <span class="dfe-label">Nota interna</span>
+                <span class="dfe-label">Nota interna (solo equipo)</span>
                 <textarea class="dfe-note" id="dfe-internal-note" rows="4" placeholder="Escribí una nota interna del estudio…">${note}</textarea>
               </label>
               <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
                 <button type="button" class="btn-primary dfe-btn-sm" data-dfe-save-note>Guardar nota</button>
               </div>
-              <div class="dfe-muted" style="margin-top:8px;font-size:12px">
-                ${
-                  trk?.firstViewedBy
-                    ? `Vista por primera vez por: <strong>${escHtml(trk.firstViewedBy)}</strong>${
-                        trk.firstViewedByRole
-                          ? ` <span class="dfe-muted">(${escHtml(String(trk.firstViewedByRole))})</span>`
-                          : ""
-                      }`
-                    : "Aún sin vistas internas registradas."
-                }
-              </div>
             </div>
           </div>
         </div>
+
         <div class="dfe-detail-block">
-          <h4 class="dfe-detail-h">Actividad interna</h4>
+          <h4 class="dfe-detail-h">Contenido (AFIP)</h4>
+          <div class="dfe-detail-content">${
+            bodyText
+              ? `<pre class="dfe-msg-pre">${escHtml(bodyText)}</pre>`
+              : "<p class=\"dfe-muted\">Sin texto de cuerpo en la respuesta.</p>"
+          }</div>
+        </div>
+        <div class="dfe-detail-block">
+          <h4 class="dfe-detail-h">Adjuntos ${incluirAdjuntos ? "(AFIP)" : ""}</h4>
+          ${adjBlock}
+        </div>
+        <div class="dfe-detail-block">
+          <h4 class="dfe-detail-h">Actividad del equipo</h4>
+          <p class="dfe-muted dfe-detail-sub">Registro de acciones en ATT-WEB (no es el historial ARCA).</p>
           <div class="dfe-activity" id="dfe-activity"></div>
         </div>
         <div class="dfe-detail-block">
@@ -734,15 +1057,21 @@ function renderDetailModal(data, options = {}) {
             : "Marcar como gestionada";
           const trkF = fresh;
           const attStateF = computeAttState(trkF);
-          const attBadgeF =
-            attStateF === "new"
-              ? `<span class="dfe-badge dfe-badge--new">Nueva</span>`
-              : attStateF === "managed"
-              ? `<span class="dfe-badge dfe-badge--managed">Gestionada</span>`
-              : `<span class="dfe-badge dfe-badge--viewed">Vista</span>`;
-          const dd = overlay.querySelector("[data-dfe-estado-att]");
-          if (dd) {
-            dd.innerHTML = `${escHtml(data.estadoDescripcion || data.estado)} ${attBadgeF}`;
+          const wrapBadges = overlay.querySelector("[data-dfe-att-badge-wrap]");
+          if (wrapBadges) wrapBadges.innerHTML = buildAttBadgeModalHtml(attStateF);
+          const mlineEl = overlay.querySelector("[data-dfe-managed-line]");
+          if (mlineEl) {
+            mlineEl.innerHTML = fresh?.managed
+              ? `<strong>Sí</strong> · ${escHtml(fresh.managedBy || "—")} · ${escHtml(formatFirestoreTsHuman(fresh.managedAt))}`
+              : "<span class=\"dfe-muted\">No</span>";
+          }
+          const lv = overlay.querySelector("[data-dfe-fact-lastview]");
+          if (lv) {
+            lv.textContent = `${fresh?.lastViewedBy || "—"} · ${formatFirestoreTsHuman(fresh?.lastViewedAt)}`;
+          }
+          const fv = overlay.querySelector("[data-dfe-fact-firstview]");
+          if (fv) {
+            fv.textContent = `${fresh?.firstViewedBy || "—"} · ${formatFirestoreTsHuman(fresh?.firstViewedAt)}`;
           }
           paintDfeActivityInModal(overlay, fresh);
           setInternalCollabStatus(overlay, "Estado guardado.", "ok");
@@ -792,6 +1121,8 @@ function renderDetailModal(data, options = {}) {
             managed: Boolean(fresh?.managed),
           };
           paintDfeActivityInModal(overlay, fresh);
+          paintKpisAndFilters();
+          paintTable(getFilteredRows(lastPageRows), lastCuit);
           setInternalCollabStatus(overlay, "Nota guardada.", "ok");
           setTimeout(() => setInternalCollabStatus(overlay, ""), 2200);
         } catch (err) {
@@ -807,6 +1138,8 @@ function renderDetailModal(data, options = {}) {
               managed: Boolean(fresh?.managed),
             };
             paintDfeActivityInModal(overlay, fresh);
+            paintKpisAndFilters();
+            paintTable(getFilteredRows(lastPageRows), lastCuit);
             setInternalCollabStatus(overlay, err.message, "warn");
           } else {
             setInternalCollabStatus(
@@ -996,6 +1329,20 @@ export async function initConsultasDfePage() {
   }
   refreshDfeEmptyHomoHint();
 
+  // Inbox (bandeja consolidada) — carga inicial.
+  try {
+    // Mostrar botón sync solo a admin/superadmin.
+    const uRole = appState.session.user?.role || "lectura";
+    const btnSync = document.getElementById("dfe-inbox-sync");
+    if (btnSync) {
+      btnSync.classList.toggle("is-hidden", !(uRole === "superadmin" || uRole === "admin"));
+    }
+    bindInboxEvents();
+    await loadInboxFromFirestore();
+  } catch (e) {
+    console.warn("[DFE] inbox:", e);
+  }
+
   root.addEventListener("submit", (e) => {
     const form = e.target;
     if (form?.id !== "dfe-form") return;
@@ -1036,18 +1383,6 @@ export async function initConsultasDfePage() {
     const sel = e.target?.closest?.("#dfe-order");
     if (sel) {
       runConsultar({ pagina: 1 });
-    }
-    if (e.target?.closest?.("#dfe-only-new")) {
-      onlyNew = Boolean(document.getElementById("dfe-only-new")?.checked);
-      const filtered = getFilteredRows(lastPageRows);
-      paintTable(filtered, lastCuit);
-      paintKpisAndFilters();
-    }
-    if (e.target?.closest?.("#dfe-att-state")) {
-      currentAttFilter = String(document.getElementById("dfe-att-state")?.value || "all");
-      const filtered = getFilteredRows(lastPageRows);
-      paintTable(filtered, lastCuit);
-      paintKpisAndFilters();
     }
   });
 }

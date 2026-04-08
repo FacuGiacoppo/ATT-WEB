@@ -8,10 +8,8 @@ export function renderConsultasDfeView() {
         <div>
           <h1 class="page-title">Consultas DFE</h1>
           <p class="page-subtitle">
-            Consultá comunicaciones de la Ventanilla Electrónica (e-Ventanilla) para un CUIT representado.
-            Los certificados y el acceso a AFIP se resuelven solo en el servidor; acá solo ves resultados.
-            Si abrís el sitio en HTTPS (por ejemplo GitHub Pages), la API tiene que estar en una URL HTTPS pública;
-            <code class="dfe-inline-code">127.0.0.1</code> solo funciona cuando la web y la API corren en tu PC.
+            Bandeja central del estudio: comunicaciones DFE de todos los clientes habilitados, persistidas en Firestore.
+            El seguimiento interno (vista, gestión, notas) también queda compartido para el equipo.
           </p>
         </div>
       </header>
@@ -24,7 +22,80 @@ export function renderConsultasDfeView() {
         <div class="dfe-guide-body" id="dfe-superadmin-guide-body"></div>
       </details>
 
-      <div class="dfe-card dfe-form-card">
+      <div class="dfe-card dfe-inbox-card">
+        <div class="dfe-inbox-head">
+          <div>
+            <h2 class="dfe-results-title">Bandeja</h2>
+            <p class="dfe-results-meta" id="dfe-inbox-meta"></p>
+          </div>
+          <div class="dfe-inbox-actions">
+            <button type="button" class="btn-secondary dfe-btn-sm" id="dfe-inbox-refresh">Recargar</button>
+            <button type="button" class="btn-primary dfe-btn-sm is-hidden" id="dfe-inbox-sync">Sincronizar ahora</button>
+          </div>
+        </div>
+
+        <div class="dfe-inbox-filters" id="dfe-inbox-filters">
+          <label class="dfe-inline-filter">
+            <span class="dfe-inline-label">Cliente</span>
+            <select id="dfe-filter-cliente">
+              <option value="" selected>Todos</option>
+            </select>
+          </label>
+          <label class="dfe-inline-filter">
+            <span class="dfe-inline-label">Estado ATT</span>
+            <select id="dfe-att-state">
+              <option value="all" selected>Todas</option>
+              <option value="new">Nuevas</option>
+              <option value="viewed">Vistas</option>
+              <option value="managed">Gestionadas</option>
+            </select>
+          </label>
+          <label class="dfe-inline-filter">
+            <input type="checkbox" id="dfe-filter-adj" />
+            <span>Con adjuntos</span>
+          </label>
+          <label class="dfe-inline-filter">
+            <input type="checkbox" id="dfe-filter-note" />
+            <span>Con nota</span>
+          </label>
+          <label class="dfe-inline-filter dfe-inline-filter--grow">
+            <span class="dfe-inline-label">Buscar</span>
+            <input type="search" id="dfe-filter-q" placeholder="Asunto, organismo, cliente…" />
+          </label>
+        </div>
+
+        <div class="dfe-table-scroll">
+          <table class="dfe-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Fecha</th>
+                <th>Asunto</th>
+                <th>Organismo</th>
+                <th>Clasificación</th>
+                <th>Estado ARCA</th>
+                <th>Seguimiento ATT-WEB</th>
+                <th class="dfe-th-signals">Señales</th>
+                <th class="dfe-th-action">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="dfe-inbox-body"></tbody>
+          </table>
+        </div>
+
+        <div class="dfe-empty is-hidden" id="dfe-inbox-empty">
+          <div class="dfe-empty-icon" aria-hidden="true">📭</div>
+          <p class="dfe-empty-title">Sin comunicaciones en la bandeja</p>
+          <p class="dfe-empty-hint">Habilitá clientes en <code>dfe_clients</code> y ejecutá “Sincronizar ahora”.</p>
+        </div>
+      </div>
+
+      <details class="dfe-advanced" id="dfe-advanced">
+        <summary class="dfe-guide-summary">
+          <span class="dfe-guide-title">Consulta avanzada</span>
+          <span class="dfe-guide-sub">Buscar por CUIT y rango</span>
+        </summary>
+        <div class="dfe-card dfe-form-card">
         <form class="dfe-form" id="dfe-form" autocomplete="off">
           <div class="dfe-form-grid">
             <label class="dfe-field">
@@ -62,6 +133,7 @@ export function renderConsultasDfeView() {
           </div>
         </form>
       </div>
+      </details>
 
       <div class="dfe-status-zone" aria-live="polite">
         <div class="dfe-loading is-hidden" id="dfe-loading">
@@ -75,22 +147,9 @@ export function renderConsultasDfeView() {
         <div class="dfe-results-head">
           <h2 class="dfe-results-title">Resultados</h2>
           <p class="dfe-results-meta" id="dfe-results-meta"></p>
+          <p class="dfe-kpis-hint is-hidden" id="dfe-kpis-hint"></p>
           <div class="dfe-kpis is-hidden" id="dfe-kpis"></div>
-          <div class="dfe-results-filters is-hidden" id="dfe-results-filters">
-            <label class="dfe-inline-filter">
-              <input type="checkbox" id="dfe-only-new" />
-              <span>Solo nuevas</span>
-            </label>
-            <label class="dfe-inline-filter">
-              <span class="dfe-inline-label">Estado ATT</span>
-              <select id="dfe-att-state">
-                <option value="all" selected>Todas</option>
-                <option value="new">Nuevas</option>
-                <option value="viewed">Vistas</option>
-                <option value="managed">Gestionadas</option>
-              </select>
-            </label>
-          </div>
+          <div class="dfe-results-filters is-hidden" id="dfe-results-filters"></div>
           <div class="dfe-pager is-hidden" id="dfe-pager">
             <button type="button" class="btn-secondary dfe-btn-sm" id="dfe-prev">Anterior</button>
             <span class="dfe-pager-label" id="dfe-page-label">Página 1 de 1</span>
@@ -106,9 +165,9 @@ export function renderConsultasDfeView() {
                 <th>Asunto</th>
                 <th>Organismo</th>
                 <th>Clasificación</th>
-                <th>Estado</th>
-                <th>ATT</th>
-                <th>Adjuntos</th>
+                <th>Estado ARCA</th>
+                <th>Seguimiento ATT-WEB</th>
+                <th class="dfe-th-signals">Señales</th>
                 <th class="dfe-th-action">Acción</th>
               </tr>
             </thead>
@@ -126,7 +185,7 @@ export function renderConsultasDfeView() {
       </div>
 
       <p class="dfe-footnote">
-        Etapa 2 (pendiente): persistencia en Firestore, sincronización incremental, alertas y multi-representados.
+        El seguimiento interno (vista, gestión, notas) se guarda en equipo vía Firestore. Pendiente a futuro: sincronización automática, alertas globales y vistas multi-representado.
       </p>
     </section>
   `;

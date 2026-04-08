@@ -69,3 +69,21 @@ export async function apiGetHealthAuth() {
   const body = await parseJson(res);
   return { ok: res.ok && body.ok !== false, status: res.status, ...body };
 }
+
+export async function apiPostSyncAll() {
+  const base = getDfeApiBase();
+  const res = await authedFetch(`${base}/api/dfe/sync`, { method: "POST" });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function apiPostSyncClient(payload) {
+  const base = getDfeApiBase();
+  const res = await authedFetch(`${base}/api/dfe/sync-client`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}

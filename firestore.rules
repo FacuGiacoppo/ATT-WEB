@@ -141,6 +141,25 @@ service cloud.firestore {
     }
 
     // =========================
+    // DFE inbox (datos externos ARCA/AFIP persistidos)
+    // =========================
+
+    // Config de clientes habilitados para sync DFE.
+    // DocID recomendado: CUIT (11 dígitos).
+    match /dfe_clients/{cuit} {
+      allow read: if canColab();
+      // Configuración: solo admin/superadmin.
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Comunicaciones DFE persistidas (solo lectura desde frontend; escritura la hace el backend).
+    // DocID recomendado: {cuitRepresentada}__{idComunicacion}
+    match /dfe_comunicaciones/{docId} {
+      allow read: if canColab();
+      allow write: if false;
+    }
+
+    // =========================
     // Colaboración transversal (metadata interna por módulo + entidad)
     // Doc ID: {moduleId}__{entityKey}  ej. dfe__20279722796__610201380
     //
