@@ -54,7 +54,17 @@ from dfe_service import DfeServiceError, consumir_comunicacion, consultar_comuni
 from sanitize import sanitize
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+def _cors_origins():
+    # Cloud Run/Firebase Hosting: restringir por env (coma-separado). Default: "*".
+    raw = (os.environ.get("DFE_CORS_ORIGINS") or "").strip()
+    if not raw:
+        return "*"
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    return parts or "*"
+
+
+CORS(app, resources={r"/api/*": {"origins": _cors_origins()}})
 
 
 def _err_payload(exc: DfeServiceError) -> tuple[dict, int]:
@@ -148,7 +158,7 @@ def route_detalle():
 
 
 if __name__ == "__main__":
-    host = os.environ.get("DFE_API_HOST", "127.0.0.1")
-    port = int(os.environ.get("DFE_API_PORT", "5050"))
+    host = os.environ.get("DFE_API_HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT") or os.environ.get("DFE_API_PORT", "5050"))
     print(f"DFE API en http://{host}:{port}  (Consultas DFE → ATT-WEB)")
     app.run(host=host, port=port, debug=os.environ.get("DFE_API_DEBUG", "").lower() in ("1", "true"))
