@@ -66,6 +66,101 @@ def _cors_origins():
 
 CORS(app, resources={r"/api/*": {"origins": _cors_origins()}})
 
+def _allowed_roles() -> set[str]:
+    raw = (os.environ.get("DFE_ALLOWED_ROLES") or "").strip()
+    if raw:
+        return {r.strip() for r in raw.split(",") if r.strip()}
+    # Default: mismos roles “colaborativos” del frontend
+    return {"superadmin", "admin", "colaborador"}
+
+
+def _get_bearer_token() -> str | None:
+    h = (request.headers.get("Authorization") or "").strip()
+    if not h:
+        return None
+    if not h.lower().startswith("bearer "):
+        return None
+    t = h[7:].strip()
+    return t or None
+
+
+_FIREBASE_ADMIN_READY = False
+
+
+def _ensure_firebase_admin():
+    global _FIREBASE_ADMIN_READY
+    if _FIREBASE_ADMIN_READY:
+        return
+    # En Cloud Run usa credenciales por defecto (service account). En local puede usar ADC.
+    import firebase_admin
+
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app()
+    _FIREBASE_ADMIN_READY = True
+
+
+def _require_att_user() -> dict:
+    """
+    Autenticación + autorización para DFE:
+    - Authorization: Bearer <Firebase ID token>
+    - Firestore users/{uid} existe, active=true, role ∈ allowed.
+    """
+    token = _get_bearer_token()
+    if not token:
+        raise DfeServiceError("auth", "Falta token Bearer.", http_status=401)
+
+    try:
+        _ensure_firebase_admin()
+        from firebase_admin import auth as fb_auth  # type: ignore
+
+        decoded = fb_auth.verify_id_token(token)
+        uid = decoded.get("uid") or decoded.get("user_id")
+        if not uid:
+            raise DfeServiceError("auth", "Token inválido (sin uid).", http_status=401)
+    except DfeServiceError:
+        raise
+    except Exception:
+        raise DfeServiceError("auth", "Token inválido.", http_status=401)
+
+    # Validación de perfil interno ATT-WEB
+    try:
+        from google.cloud import firestore  # type: ignore
+
+        db = firestore.Client()
+        snap = db.collection("users").document(uid).get()
+        if not snap.exists:
+            raise DfeServiceError("forbidden", "Perfil de usuario no encontrado.", http_status=403)
+        data = snap.to_dict() or {}
+        if not data.get("active"):
+            raise DfeServiceError("forbidden", "Usuario inactivo.", http_status=403)
+        role = (data.get("role") or "lectura").strip()
+        if role not in _allowed_roles():
+            raise DfeServiceError("forbidden", "Sin permiso para Consultas DFE.", http_status=403)
+        return {"uid": uid, "role": role, "name": data.get("name") or data.get("email") or uid}
+    except DfeServiceError:
+        raise
+    except Exception:
+        traceback.print_exc()
+        raise DfeServiceError("forbidden", "No se pudo validar el perfil.", http_status=403)
+
+
+@app.before_request
+def _auth_guard():
+    # Proteger solo DFE
+    p = request.path or ""
+    if not p.startswith("/api/dfe/"):
+        return None
+    # Health público mínimo: no filtra config ni paths
+    if p == "/api/dfe/health":
+        return None
+    # Todo lo demás requiere token + rol
+    try:
+        request.att_user = _require_att_user()  # type: ignore[attr-defined]
+    except DfeServiceError as e:
+        payload, st = _err_payload(e)
+        return jsonify(sanitize(payload)), st
+    return None
+
 
 def _err_payload(exc: DfeServiceError) -> tuple[dict, int]:
     return (
@@ -81,6 +176,16 @@ def _err_payload(exc: DfeServiceError) -> tuple[dict, int]:
 
 @app.get("/api/dfe/health")
 def route_health():
+    try:
+        # Público: solo "liveness", sin detalles del entorno/paths.
+        return jsonify({"ok": True, "service": "dfe_api"})
+    except Exception as e:
+        return jsonify(sanitize({"ok": False, "error": "health", "message": str(e)})), 500
+
+
+@app.get("/api/dfe/health/auth")
+def route_health_auth():
+    """Health más detallado, protegido por Firebase Auth + rol."""
     try:
         body = health_check()
         return jsonify(sanitize({"ok": bool(body.get("configPresent")), **body}))

@@ -2,3 +2,4 @@
 -r ../arca_ve_connector/requirements.txt
 flask>=3.0.0
 flask-cors>=4.0.0
+firebase-admin>=6.5.0
