@@ -5,7 +5,6 @@ import {
   apiPostComunicaciones,
   apiPostComunicacionDetalle,
   apiPostSyncAll,
-  assertDfeAuthReady,
 } from "./dfe.service.js";
 import { appState } from "../../app/state.js";
 import { DELEGACION_GUIDE } from "./delegacion-guide.js";
@@ -32,6 +31,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
 import { db } from "../../config/firebase.js";
+import { auth } from "../../config/firebase.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 
 export { renderConsultasDfeView };
 
@@ -325,6 +326,39 @@ let inboxFiltered = [];
 let inboxClientMap = new Map(); // cuit -> nombre
 let inboxSelectedClient = "";
 let inboxQ = "";
+let dfeAuthReady = false;
+
+function setStatus(msg) {
+  // Reutilizamos el banner existente (dfe-error) como zona de estado.
+  setError(msg || "");
+}
+
+function disableDfeActions(disabled) {
+  const btnSync = document.getElementById("dfe-inbox-sync");
+  const btnConsultar = document.getElementById("dfe-btn-consultar");
+  if (btnSync) btnSync.disabled = Boolean(disabled);
+  if (btnConsultar) btnConsultar.disabled = Boolean(disabled);
+}
+
+export function initDfeAuth() {
+  return new Promise((resolve) => {
+    onAuthStateChanged(auth, async (user) => {
+      try {
+        if (user) {
+          await user.getIdToken(); // fuerza token
+          dfeAuthReady = true;
+          resolve(true);
+        } else {
+          dfeAuthReady = false;
+          resolve(false);
+        }
+      } catch {
+        dfeAuthReady = false;
+        resolve(false);
+      }
+    });
+  });
+}
 
 function refreshDfeEmptyHomoHint() {
   const el = document.getElementById("dfe-empty-hint-homo");
@@ -470,24 +504,24 @@ async function loadInboxFromFirestore() {
 }
 
 async function syncNow() {
-  setError("");
+  if (!dfeAuthReady) {
+    setStatus("Esperá a que la sesión termine de inicializar.");
+    return;
+  }
+  setStatus("");
   setLoading(true);
   try {
     const res = await apiPostSyncAll();
     if (!res.ok) {
-      if (res.status === 401) setError("No autenticado o sesión aún inicializando. Probá recargar.");
-      else if (res.status === 403) setError("Tu usuario no tiene permiso para sincronizar.");
-      else setError(res.message || "No se pudo sincronizar.");
+      if (res.status === 401) setStatus("No autenticado.");
+      else if (res.status === 403) setStatus("Tu usuario no tiene permiso para sincronizar.");
+      else setStatus(res.message || "No se pudo sincronizar.");
       return;
     }
     await loadInboxFromFirestore();
   } catch (e) {
     console.error(e);
-    if (e?.code === "DFE_AUTH_NOT_READY" || String(e?.message || "").includes("DFE_AUTH_NOT_READY")) {
-      setError("Inicializando sesión… esperá 1–2 segundos y reintentá.");
-    } else {
-      setError(explainDfeFetchFailure());
-    }
+    setStatus(explainDfeFetchFailure());
   } finally {
     setLoading(false);
   }
@@ -628,7 +662,11 @@ function dfeFirestoreErrorMessage(err, fallback) {
 }
 
 async function runConsultar(extra) {
-  setError("");
+  if (!dfeAuthReady) {
+    setStatus("Esperá a que la sesión termine de inicializar.");
+    return;
+  }
+  setStatus("");
   const payload = { ...readFormPayload(), ...extra };
   payload.fechaDesde = normalizeDateForApi(payload.fechaDesde);
   payload.fechaHasta = normalizeDateForApi(payload.fechaHasta);
@@ -1325,25 +1363,21 @@ export async function initConsultasDfePage() {
     if (btnSync) {
       btnSync.classList.toggle("is-hidden", !(uRole === "superadmin" || uRole === "admin"));
     }
-    // No habilitar acciones protegidas hasta que Firebase Auth tenga currentUser + token.
-    const btnSync2 = document.getElementById("dfe-inbox-sync");
-    const btnConsultar = document.getElementById("dfe-btn-consultar");
-    if (btnSync2) btnSync2.disabled = true;
-    if (btnConsultar) btnConsultar.disabled = true;
-    setError("Inicializando sesión…");
-    await assertDfeAuthReady();
-    setError("");
-    if (btnSync2) btnSync2.disabled = false;
-    if (btnConsultar) btnConsultar.disabled = false;
+    setStatus("Inicializando sesión…");
+    disableDfeActions(true);
+    await initDfeAuth();
+    if (dfeAuthReady) {
+      setStatus("");
+      disableDfeActions(false);
+    } else {
+      setStatus("No autenticado.");
+      disableDfeActions(true);
+    }
     bindInboxEvents();
     await loadInboxFromFirestore();
   } catch (e) {
     console.warn("[DFE] inbox:", e);
-    // Si falla auth-ready, no bloquear la UI: el usuario puede recargar o re-loguear.
-    const msg = String(e?.message || "");
-    if (msg.includes("AUTH_NOT_READY_TIMEOUT")) {
-      setError("No se pudo inicializar sesión a tiempo. Probá recargar o volver a iniciar sesión.");
-    }
+    setStatus("No se pudo cargar la bandeja DFE. Revisá consola.");
   }
 
   root.addEventListener("submit", (e) => {
