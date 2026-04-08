@@ -165,6 +165,9 @@ def _auth_guard():
     p = request.path or ""
     if not p.startswith("/api/dfe/"):
         return None
+    # Preflight CORS: no autenticar OPTIONS.
+    if request.method == "OPTIONS":
+        return None
     # Health público mínimo: no filtra config ni paths
     if p == "/api/dfe/health":
         return None
