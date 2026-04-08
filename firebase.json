@@ -31,7 +31,7 @@
         "source": "/api/**",
         "run": {
           "serviceId": "att-dfe-api",
-          "region": "us-central1"
+          "region": "southamerica-east1"
         }
       },
       {
