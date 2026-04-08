@@ -5,6 +5,7 @@ import {
   apiPostComunicaciones,
   apiPostComunicacionDetalle,
   apiPostSyncAll,
+  assertDfeAuthReady,
 } from "./dfe.service.js";
 import { appState } from "../../app/state.js";
 import { DELEGACION_GUIDE } from "./delegacion-guide.js";
@@ -474,13 +475,19 @@ async function syncNow() {
   try {
     const res = await apiPostSyncAll();
     if (!res.ok) {
-      setError(res.message || "No se pudo sincronizar.");
+      if (res.status === 401) setError("No autenticado o sesión aún inicializando. Probá recargar.");
+      else if (res.status === 403) setError("Tu usuario no tiene permiso para sincronizar.");
+      else setError(res.message || "No se pudo sincronizar.");
       return;
     }
     await loadInboxFromFirestore();
   } catch (e) {
     console.error(e);
-    setError(explainDfeFetchFailure());
+    if (e?.code === "DFE_AUTH_NOT_READY" || String(e?.message || "").includes("DFE_AUTH_NOT_READY")) {
+      setError("Inicializando sesión… esperá 1–2 segundos y reintentá.");
+    } else {
+      setError(explainDfeFetchFailure());
+    }
   } finally {
     setLoading(false);
   }
@@ -1318,10 +1325,25 @@ export async function initConsultasDfePage() {
     if (btnSync) {
       btnSync.classList.toggle("is-hidden", !(uRole === "superadmin" || uRole === "admin"));
     }
+    // No habilitar acciones protegidas hasta que Firebase Auth tenga currentUser + token.
+    const btnSync2 = document.getElementById("dfe-inbox-sync");
+    const btnConsultar = document.getElementById("dfe-btn-consultar");
+    if (btnSync2) btnSync2.disabled = true;
+    if (btnConsultar) btnConsultar.disabled = true;
+    setError("Inicializando sesión…");
+    await assertDfeAuthReady();
+    setError("");
+    if (btnSync2) btnSync2.disabled = false;
+    if (btnConsultar) btnConsultar.disabled = false;
     bindInboxEvents();
     await loadInboxFromFirestore();
   } catch (e) {
     console.warn("[DFE] inbox:", e);
+    // Si falla auth-ready, no bloquear la UI: el usuario puede recargar o re-loguear.
+    const msg = String(e?.message || "");
+    if (msg.includes("AUTH_NOT_READY_TIMEOUT")) {
+      setError("No se pudo inicializar sesión a tiempo. Probá recargar o volver a iniciar sesión.");
+    }
   }
 
   root.addEventListener("submit", (e) => {

@@ -110,8 +110,25 @@ def _ensure_firebase_admin():
     import firebase_admin
 
     if not firebase_admin._apps:
-        firebase_admin.initialize_app()
+        pid = (
+            os.environ.get("FIREBASE_PROJECT_ID")
+            or os.environ.get("GOOGLE_CLOUD_PROJECT")
+            or os.environ.get("GCLOUD_PROJECT")
+        )
+        # Para verify_id_token es clave tener projectId correcto (audience).
+        # En Cloud Run esto suele venir por env; en local lo permitimos por FIREBASE_PROJECT_ID.
+        opts = {"projectId": pid} if pid else None
+        firebase_admin.initialize_app(options=opts)  # type: ignore[arg-type]
     _FIREBASE_ADMIN_READY = True
+
+
+def _auth_debug_enabled() -> bool:
+    return (os.environ.get("DFE_AUTH_DEBUG") or "").lower() in ("1", "true", "yes")
+
+
+def _auth_log(msg: str) -> None:
+    if _auth_debug_enabled():
+        print(f"[dfe-auth] {msg}", flush=True)
 
 
 def _require_att_user() -> dict:
@@ -122,20 +139,25 @@ def _require_att_user() -> dict:
     """
     token = _get_bearer_token()
     if not token:
+        _auth_log("missing bearer token")
         raise DfeServiceError("auth", "Falta token Bearer.", http_status=401)
 
     try:
         _ensure_firebase_admin()
         from firebase_admin import auth as fb_auth  # type: ignore
 
+        _auth_log(f"bearer token len={len(token)}")
         decoded = fb_auth.verify_id_token(token)
         uid = decoded.get("uid") or decoded.get("user_id")
         if not uid:
+            _auth_log("token verified but missing uid")
             raise DfeServiceError("auth", "Token inválido (sin uid).", http_status=401)
+        _auth_log(f"token ok uid={uid!r} aud={decoded.get('aud')!r} iss={decoded.get('iss')!r}")
     except DfeServiceError:
         raise
-    except Exception:
-        raise DfeServiceError("auth", "Token inválido.", http_status=401)
+    except Exception as e:
+        _auth_log(f"verify_id_token failed: {type(e).__name__}: {e}")
+        raise DfeServiceError("auth", "Token inválido.", http_status=401, detail={"kind": type(e).__name__})
 
     # Validación de perfil interno ATT-WEB
     try:
@@ -144,12 +166,15 @@ def _require_att_user() -> dict:
         db = firestore.Client()
         snap = db.collection("users").document(uid).get()
         if not snap.exists:
+            _auth_log(f"profile missing uid={uid!r}")
             raise DfeServiceError("forbidden", "Perfil de usuario no encontrado.", http_status=403)
         data = snap.to_dict() or {}
         if not data.get("active"):
+            _auth_log(f"profile inactive uid={uid!r}")
             raise DfeServiceError("forbidden", "Usuario inactivo.", http_status=403)
         role = (data.get("role") or "lectura").strip()
         if role not in _allowed_roles():
+            _auth_log(f"profile role denied uid={uid!r} role={role!r}")
             raise DfeServiceError("forbidden", "Sin permiso para Consultas DFE.", http_status=403)
         return {"uid": uid, "role": role, "name": data.get("name") or data.get("email") or uid}
     except DfeServiceError:

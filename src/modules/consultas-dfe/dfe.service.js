@@ -1,10 +1,43 @@
 import { getDfeApiBase } from "../../config/dfe-api.js";
 import { auth } from "../../config/firebase.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+
+function dfeAuthLog(...args) {
+  if (typeof window !== "undefined" && window.__ATT_DEBUG_DFE_AUTH__) {
+    console.log("[DFE AUTH]", ...args);
+  }
+}
+
+async function waitForAuthReady({ timeoutMs = 8000 } = {}) {
+  if (auth.currentUser) return auth.currentUser;
+  dfeAuthLog("auth.currentUser is null; waiting for onAuthStateChanged…");
+  return await new Promise((resolve, reject) => {
+    let done = false;
+    const t = setTimeout(() => {
+      if (done) return;
+      done = true;
+      reject(new Error("AUTH_NOT_READY_TIMEOUT"));
+    }, timeoutMs);
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      try {
+        unsub();
+      } catch {}
+      resolve(u);
+    });
+  });
+}
 
 async function authHeaders() {
-  const u = auth.currentUser;
-  if (!u) return {};
+  const u = auth.currentUser || (await waitForAuthReady().catch(() => null));
+  if (!u) {
+    dfeAuthLog("no firebase user; cannot attach token");
+    return { __dfeAuthMissing: "1" };
+  }
   const token = await u.getIdToken();
+  dfeAuthLog("token ready", { uid: u.uid, tokenLen: String(token || "").length });
   return { Authorization: `Bearer ${token}` };
 }
 
@@ -18,8 +51,21 @@ async function parseJson(res) {
 
 async function authedFetch(url, init = {}) {
   const h = await authHeaders();
+  if (h.__dfeAuthMissing) {
+    const e = new Error("DFE_AUTH_NOT_READY");
+    e.code = "DFE_AUTH_NOT_READY";
+    throw e;
+  }
   const headers = { ...(init.headers || {}), ...h };
+  dfeAuthLog("fetch", { url, method: init.method || "GET" });
   return fetch(url, { ...init, headers });
+}
+
+export async function assertDfeAuthReady() {
+  const u = await waitForAuthReady();
+  if (!u) throw new Error("NO_USER");
+  await u.getIdToken();
+  return true;
 }
 
 /**
