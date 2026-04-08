@@ -319,8 +319,14 @@ def route_sync_client():
     try:
         from sync_service import sync_cuit_into_firestore
 
+        _auth_log(
+            f"sync-client requested by uid={u.get('uid')!r} role={u.get('role')!r} cuitRepresentada={cuit!r}"
+        )
         db = _fs_client()
         r = sync_cuit_into_firestore(db=db, cuit_representada=cuit, nombre_cliente=nombre)
+        _auth_log(
+            f"sync-client result cuit={r.get('cuitRepresentada')!r} upserted={r.get('upserted')!r} windowDays={r.get('windowDays')!r}"
+        )
         db.collection("dfe_clients").document(r["cuitRepresentada"]).set(
             {
                 "cuit": r["cuitRepresentada"],
@@ -340,6 +346,22 @@ def route_sync_client():
     except Exception as e:
         traceback.print_exc()
         return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.get("/api/dfe/whoami")
+def route_whoami():
+    """Debug dirigido: confirma si el token valida y qué rol ve el backend."""
+    u = getattr(request, "att_user", None) or {}
+    return jsonify(
+        sanitize(
+            {
+                "ok": True,
+                "uid": u.get("uid"),
+                "role": u.get("role"),
+                "name": u.get("name"),
+            }
+        )
+    )
 
 
 @app.post("/api/dfe/comunicaciones")

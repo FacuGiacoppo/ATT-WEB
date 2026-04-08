@@ -8,6 +8,16 @@ function dfeAuthLog(...args) {
   }
 }
 
+if (typeof window !== "undefined") {
+  // Helper temporal de debugging para poder extraer token sin UI.
+  // Uso en consola: await window.__ATT_DFE_GET_ID_TOKEN__()
+  window.__ATT_DFE_GET_ID_TOKEN__ = async () => {
+    const u = auth.currentUser;
+    if (!u) return null;
+    return await u.getIdToken();
+  };
+}
+
 async function waitForAuthReady({ timeoutMs = 8000 } = {}) {
   if (auth.currentUser) return auth.currentUser;
   dfeAuthLog("auth.currentUser is null; waiting for onAuthStateChanged…");
@@ -37,7 +47,7 @@ async function authHeaders() {
     return { __dfeAuthMissing: "1" };
   }
   const token = await u.getIdToken();
-  dfeAuthLog("token ready", { uid: u.uid, tokenLen: String(token || "").length });
+  dfeAuthLog("token ready", { uid: u.uid, email: u.email, tokenLen: String(token || "").length });
   return { Authorization: `Bearer ${token}` };
 }
 
@@ -58,7 +68,9 @@ async function authedFetch(url, init = {}) {
   }
   const headers = { ...(init.headers || {}), ...h };
   dfeAuthLog("fetch", { url, method: init.method || "GET" });
-  return fetch(url, { ...init, headers });
+  const res = await fetch(url, { ...init, headers });
+  dfeAuthLog("response", { url, status: res.status });
+  return res;
 }
 
 export async function assertDfeAuthReady() {

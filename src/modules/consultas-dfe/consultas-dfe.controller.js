@@ -340,21 +340,34 @@ function disableDfeActions(disabled) {
   if (btnConsultar) btnConsultar.disabled = Boolean(disabled);
 }
 
-export function initDfeAuth() {
+export function initDfeAuth({ timeoutMs = 8000 } = {}) {
+  // Importante: onAuthStateChanged puede llamar 1 vez con null “transitorio” antes de restaurar sesión.
+  // No resolvemos false hasta que:
+  // - recibimos un user, o
+  // - se cumple el timeout.
   return new Promise((resolve) => {
-    onAuthStateChanged(auth, async (user) => {
+    let done = false;
+    const t = setTimeout(() => {
+      if (done) return;
+      done = true;
+      dfeAuthReady = false;
+      resolve(false);
+    }, timeoutMs);
+
+    const unsub = onAuthStateChanged(auth, async (user) => {
       try {
-        if (user) {
-          await user.getIdToken(); // fuerza token
-          dfeAuthReady = true;
-          resolve(true);
-        } else {
-          dfeAuthReady = false;
-          resolve(false);
-        }
+        if (!user) return;
+        await user.getIdToken(); // fuerza token
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        try {
+          unsub();
+        } catch {}
+        dfeAuthReady = true;
+        resolve(true);
       } catch {
-        dfeAuthReady = false;
-        resolve(false);
+        // si falla token, seguimos esperando hasta timeout
       }
     });
   });
