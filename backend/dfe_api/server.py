@@ -64,7 +64,15 @@ def _cors_origins():
     return parts or "*"
 
 
-CORS(app, resources={r"/api/*": {"origins": _cors_origins()}})
+# IMPORTANTE:
+# - En local, el frontend suele correr en http://localhost:3000
+#   y el backend en http://127.0.0.1:5050 (distinto origen) → requiere CORS.
+# - El patrón debe matchear rutas anidadas (/api/dfe/...) y permitir Authorization.
+CORS(
+    app,
+    resources={r"/api/.*": {"origins": _cors_origins()}},
+    allow_headers=["Content-Type", "Authorization"],
+)
 
 def _allowed_roles() -> set[str]:
     raw = (os.environ.get("DFE_ALLOWED_ROLES") or "").strip()
