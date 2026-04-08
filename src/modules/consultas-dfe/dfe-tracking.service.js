@@ -5,6 +5,7 @@ import { COLLAB_MODULES, COLLAB_EVENTS } from "../../services/collaboration/cons
 import {
   collabActorFromUser,
   collaborationMergeWithActivity,
+  collaborationMerge,
   getCollaborationDoc,
   assertNoteWriteBaseline,
   assertManagedWriteBaseline,
@@ -51,37 +52,34 @@ export async function markViewedInApp({ cuitRepresentada, idComunicacion, user }
   const idNum = Number(idComunicacion);
   const entityKey = docIdLegacy(c, idNum);
 
-  await collaborationMergeWithActivity(
+  await collaborationMerge(
     COLLAB_MODULES.DFE,
     entityKey,
     user,
     (prev, u) => {
       const a = collabActorFromUser(u);
       const now = serverTimestamp();
-      const base = {
+      const prevReaders = Array.isArray(prev?.readers) ? prev.readers : [];
+      const uid = a.uid || null;
+      if (uid && prevReaders.some((r) => r?.uid === uid)) {
+        // Lectura ya registrada (no repetir).
+        return {};
+      }
+      const entry = {
+        uid: a.uid,
+        name: a.name,
+        role: a.role,
+        firstReadAt: now,
+      };
+      return {
         cuitRepresentada: c,
         idComunicacion: idNum,
         firstSeenAt: prev?.firstSeenAt || now,
+        readers: [...prevReaders, entry],
+        // Compat legacy: algunos lugares aún miran viewedInApp
         viewedInApp: true,
-        viewedInAppAt: now,
-        lastViewedAt: now,
-        lastViewedBy: a.name,
-        lastViewedByUid: a.uid,
-        lastViewedByRole: a.role,
       };
-      if (!prev?.firstViewedAt) {
-        return {
-          ...base,
-          firstViewedAt: now,
-          firstViewedBy: a.name,
-          firstViewedByUid: a.uid,
-          firstViewedByRole: a.role,
-        };
-      }
-      return base;
     },
-    COLLAB_EVENTS.VIEWED,
-    {}
   );
 }
 
@@ -155,6 +153,44 @@ export async function saveInternalNote({
     },
     COLLAB_EVENTS.NOTE_UPDATED,
     {}
+  );
+}
+
+export async function addComment({ cuitRepresentada, idComunicacion, text, user }) {
+  const c = String(cuitRepresentada || "").replace(/\D/g, "");
+  const idNum = Number(idComunicacion);
+  const entityKey = docIdLegacy(c, idNum);
+  const t = String(text || "").trim();
+  if (!t) return;
+
+  const id =
+    (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : String(Date.now());
+
+  await collaborationMerge(
+    COLLAB_MODULES.DFE,
+    entityKey,
+    user,
+    (prev, u) => {
+      const a = collabActorFromUser(u);
+      const now = serverTimestamp();
+      const prevComments = Array.isArray(prev?.comments) ? prev.comments : [];
+      const comment = {
+        id,
+        text: t.slice(0, 2000),
+        createdAt: now,
+        createdByUid: a.uid,
+        createdByName: a.name,
+        createdByRole: a.role,
+      };
+      return {
+        cuitRepresentada: c,
+        idComunicacion: idNum,
+        firstSeenAt: prev?.firstSeenAt || now,
+        comments: [...prevComments, comment],
+      };
+    }
   );
 }
 

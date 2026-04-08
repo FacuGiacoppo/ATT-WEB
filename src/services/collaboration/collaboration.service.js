@@ -224,3 +224,39 @@ export async function collaborationMergeWithActivity(
     );
   });
 }
+
+/**
+ * Merge transaccional SIN activityLog.
+ * Útil para estados agregados (lectores únicos, comentarios) donde no queremos un historial verboso.
+ *
+ * @param {string} moduleId
+ * @param {string} entityKey
+ * @param {object|null} user
+ * @param {(prev: object|null, user: object|null) => object} mergeFn
+ */
+export async function collaborationMerge(moduleId, entityKey, user, mergeFn) {
+  const id = collabDocumentId(moduleId, entityKey);
+  const ref = doc(db, COLLAB_COLLECTION, id);
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const prev = snap.exists() ? snap.data() : null;
+    const patch = omitUndefined(mergeFn(prev, user) || {});
+    const actor = collabActorFromUser(user);
+
+    tx.set(
+      ref,
+      omitUndefined({
+        moduleId,
+        entityKey,
+        schemaVersion: COLLAB_SCHEMA_VERSION,
+        ...patch,
+        lastUpdatedAt: serverTimestamp(),
+        lastUpdatedByUid: actor.uid,
+        lastUpdatedByName: actor.name,
+        lastUpdatedByRole: actor.role,
+      }),
+      { merge: true }
+    );
+  });
+}

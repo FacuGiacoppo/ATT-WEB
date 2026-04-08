@@ -12,7 +12,7 @@ import {
   getTrackingBatch,
   getTracking,
   markViewedInApp,
-  saveInternalNote,
+  addComment,
   setManaged,
   logAttachmentDownload,
 } from "./dfe-tracking.service.js";
@@ -193,6 +193,7 @@ function rowHasAdjuntos(r) {
 }
 
 function hasInternalNote(trk) {
+  if (Array.isArray(trk?.comments) && trk.comments.length > 0) return true;
   return Boolean(trk?.internalNote && String(trk.internalNote).trim().length);
 }
 
@@ -382,6 +383,7 @@ function refreshDfeEmptyHomoHint() {
 function computeAttState(trk) {
   if (trk?.managed) return "managed";
   if (trk?.viewedInApp) return "viewed";
+  if (Array.isArray(trk?.readers) && trk.readers.length > 0) return "viewed";
   return "new";
 }
 
@@ -828,7 +830,28 @@ function renderDetailModal(data, options = {}) {
   const trk = trackingById[String(data.idComunicacion)] || null;
   const attState = computeAttState(trk);
   const attBadge = buildAttBadgeModalHtml(attState);
-  const note = trk?.internalNote ? escHtml(trk.internalNote) : "";
+  const readers = Array.isArray(trk?.readers) ? trk.readers : [];
+  const readersHtml = readers.length
+    ? `<ul class="dfe-readers">${readers
+        .map((r) => {
+          const who = escHtml(r?.name || r?.uid || "—");
+          const when = escHtml(formatFirestoreTsHuman(r?.firstReadAt));
+          return `<li><strong>${who}</strong> <span class="dfe-muted">· ${when}</span></li>`;
+        })
+        .join("")}</ul>`
+    : `<p class="dfe-muted">Aún sin lectores registrados.</p>`;
+  const comments = Array.isArray(trk?.comments) ? [...trk.comments] : [];
+  comments.sort((a, b) => (timestampToMillis(a?.createdAt) ?? 0) - (timestampToMillis(b?.createdAt) ?? 0));
+  const commentsHtml = comments.length
+    ? `<ul class="dfe-comments">${comments
+        .map((c) => {
+          const who = escHtml(c?.createdByName || c?.createdByUid || "—");
+          const when = escHtml(formatFirestoreTsHuman(c?.createdAt));
+          const txt = escHtml(c?.text || "");
+          return `<li class="dfe-comment"><div class="dfe-comment-meta"><strong>${who}</strong> <span class="dfe-muted">· ${when}</span></div><div class="dfe-comment-text">${txt}</div></li>`;
+        })
+        .join("")}</ul>`
+    : `<p class="dfe-muted">Sin comentarios aún.</p>`;
   const leidaArca =
     data.leida === true ||
     data.leida === 1 ||
@@ -868,8 +891,6 @@ function renderDetailModal(data, options = {}) {
           <div class="dfe-att-summary" data-dfe-att-summary>
             <p class="dfe-att-summary-line"><span class="dfe-muted">Estado en la app:</span> <span data-dfe-att-badge-wrap>${attBadge}</span></p>
             <ul class="dfe-att-facts">
-              <li><span class="dfe-att-facts-k">Última vista en ATT-WEB</span> <span class="dfe-att-facts-v" data-dfe-fact-lastview>${escHtml(trk?.lastViewedBy || "—")} · ${escHtml(formatFirestoreTsHuman(trk?.lastViewedAt))}</span></li>
-              <li><span class="dfe-att-facts-k">Primera vista</span> <span class="dfe-att-facts-v" data-dfe-fact-firstview>${escHtml(trk?.firstViewedBy || "—")} · ${escHtml(formatFirestoreTsHuman(trk?.firstViewedAt))}</span></li>
               <li><span class="dfe-att-facts-k">Gestionada</span> <span class="dfe-att-facts-v" data-dfe-managed-line>${managedLine}</span></li>
             </ul>
           </div>
@@ -881,12 +902,19 @@ function renderDetailModal(data, options = {}) {
               </button>
             </div>
             <div class="dfe-internal-row">
-              <label class="dfe-field" style="margin:0">
-                <span class="dfe-label">Nota interna (solo equipo)</span>
-                <textarea class="dfe-note" id="dfe-internal-note" rows="4" placeholder="Escribí una nota interna del estudio…">${note}</textarea>
-              </label>
-              <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-                <button type="button" class="btn-primary dfe-btn-sm" data-dfe-save-note>Guardar nota</button>
+              <div class="dfe-readers-block">
+                <div class="dfe-section-h">Leída por</div>
+                ${readersHtml}
+              </div>
+              <div class="dfe-comments-block">
+                <div class="dfe-section-h">Comentarios</div>
+                <div id="dfe-comments-list">${commentsHtml}</div>
+                <div class="dfe-comment-form">
+                  <textarea class="dfe-note" id="dfe-comment-text" rows="3" placeholder="Agregar comentario…"></textarea>
+                  <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+                    <button type="button" class="btn-primary dfe-btn-sm" data-dfe-add-comment>Publicar</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -903,11 +931,6 @@ function renderDetailModal(data, options = {}) {
         <div class="dfe-detail-block">
           <h4 class="dfe-detail-h">Adjuntos ${incluirAdjuntos ? "(AFIP)" : ""}</h4>
           ${adjBlock}
-        </div>
-        <div class="dfe-detail-block">
-          <h4 class="dfe-detail-h">Actividad del equipo</h4>
-          <p class="dfe-muted dfe-detail-sub">Registro de acciones en ATT-WEB (no es el historial ARCA).</p>
-          <div class="dfe-activity" id="dfe-activity"></div>
         </div>
         <div class="dfe-detail-block">
           <h4 class="dfe-detail-h">Metadatos</h4>
@@ -933,7 +956,6 @@ function renderDetailModal(data, options = {}) {
 
   document.body.appendChild(overlay);
   overlay._dfeCollabBaseline = { ...collabBaseline };
-  paintDfeActivityInModal(overlay, trk);
 
   function base64ToBytes(b64) {
     const bin = atob(String(b64 || ""));
@@ -1104,15 +1126,6 @@ function renderDetailModal(data, options = {}) {
               ? `<strong>Sí</strong> · ${escHtml(fresh.managedBy || "—")} · ${escHtml(formatFirestoreTsHuman(fresh.managedAt))}`
               : "<span class=\"dfe-muted\">No</span>";
           }
-          const lv = overlay.querySelector("[data-dfe-fact-lastview]");
-          if (lv) {
-            lv.textContent = `${fresh?.lastViewedBy || "—"} · ${formatFirestoreTsHuman(fresh?.lastViewedAt)}`;
-          }
-          const fv = overlay.querySelector("[data-dfe-fact-firstview]");
-          if (fv) {
-            fv.textContent = `${fresh?.firstViewedBy || "—"} · ${formatFirestoreTsHuman(fresh?.firstViewedAt)}`;
-          }
-          paintDfeActivityInModal(overlay, fresh);
           setInternalCollabStatus(overlay, "Estado guardado.", "ok");
           setTimeout(() => setInternalCollabStatus(overlay, ""), 2200);
         } catch (err) {
@@ -1136,22 +1149,21 @@ function renderDetailModal(data, options = {}) {
       return;
     }
 
-    const save = e.target.closest("[data-dfe-save-note]");
-    if (save) {
+    const add = e.target.closest("[data-dfe-add-comment]");
+    if (add) {
       (async () => {
-        const btn = save;
+        const btn = add;
         const baseline = overlay._dfeCollabBaseline || collabBaseline;
         btn.disabled = true;
-        setInternalCollabStatus(overlay, "Guardando nota…", "");
+        setInternalCollabStatus(overlay, "Publicando comentario…", "");
         try {
           const id = data.idComunicacion;
-          const note = overlay.querySelector("#dfe-internal-note")?.value ?? "";
-          await saveInternalNote({
+          const text = overlay.querySelector("#dfe-comment-text")?.value ?? "";
+          await addComment({
             cuitRepresentada: lastCuit,
             idComunicacion: id,
-            note,
+            text,
             user: appState.session.user,
-            expectedInternalNoteUpdatedAt: baseline.internalNoteUpdatedAt ?? null,
           });
           const fresh = await getTracking(lastCuit, id);
           trackingById[String(id)] = fresh;
@@ -1159,34 +1171,35 @@ function renderDetailModal(data, options = {}) {
             internalNoteUpdatedAt: fresh?.internalNoteUpdatedAt ?? null,
             managed: Boolean(fresh?.managed),
           };
-          paintDfeActivityInModal(overlay, fresh);
           paintKpisAndFilters();
           paintTable(getFilteredRows(lastPageRows), lastCuit);
-          setInternalCollabStatus(overlay, "Nota guardada.", "ok");
+          // Repintar comentarios
+          const list = overlay.querySelector("#dfe-comments-list");
+          if (list) {
+            const cs = Array.isArray(fresh?.comments) ? [...fresh.comments] : [];
+            cs.sort((a, b) => (timestampToMillis(a?.createdAt) ?? 0) - (timestampToMillis(b?.createdAt) ?? 0));
+            list.innerHTML = cs.length
+              ? `<ul class="dfe-comments">${cs
+                  .map((c) => {
+                    const who = escHtml(c?.createdByName || c?.createdByUid || "—");
+                    const when = escHtml(formatFirestoreTsHuman(c?.createdAt));
+                    const txt = escHtml(c?.text || "");
+                    return `<li class="dfe-comment"><div class="dfe-comment-meta"><strong>${who}</strong> <span class="dfe-muted">· ${when}</span></div><div class="dfe-comment-text">${txt}</div></li>`;
+                  })
+                  .join("")}</ul>`
+              : `<p class="dfe-muted">Sin comentarios aún.</p>`;
+          }
+          const ta = overlay.querySelector("#dfe-comment-text");
+          if (ta) ta.value = "";
+          setInternalCollabStatus(overlay, "Comentario publicado.", "ok");
           setTimeout(() => setInternalCollabStatus(overlay, ""), 2200);
         } catch (err) {
-          console.error("save note:", err);
-          if (err instanceof CollabWriteConflictError && err.kind === "note") {
-            const id = data.idComunicacion;
-            const fresh = await getTracking(lastCuit, id);
-            trackingById[String(id)] = fresh ?? trackingById[String(id)];
-            const ta = overlay.querySelector("#dfe-internal-note");
-            if (ta) ta.value = fresh?.internalNote ?? "";
-            overlay._dfeCollabBaseline = {
-              internalNoteUpdatedAt: fresh?.internalNoteUpdatedAt ?? null,
-              managed: Boolean(fresh?.managed),
-            };
-            paintDfeActivityInModal(overlay, fresh);
-            paintKpisAndFilters();
-            paintTable(getFilteredRows(lastPageRows), lastCuit);
-            setInternalCollabStatus(overlay, err.message, "warn");
-          } else {
-            setInternalCollabStatus(
-              overlay,
-              dfeFirestoreErrorMessage(err, "No se pudo guardar la nota interna."),
-              "err"
-            );
-          }
+          console.error("add comment:", err);
+          setInternalCollabStatus(
+            overlay,
+            dfeFirestoreErrorMessage(err, "No se pudo publicar el comentario."),
+            "err"
+          );
         } finally {
           btn.disabled = false;
         }
