@@ -52,6 +52,7 @@ from flask_cors import CORS
 
 from dfe_service import DfeServiceError, consumir_comunicacion, consultar_comunicaciones, consultar_estados, health_check
 from sanitize import sanitize
+from google.cloud import firestore  # type: ignore
 
 app = Flask(__name__)
 
@@ -282,7 +283,7 @@ def route_sync_all():
                         "nombre": c.get("nombre"),
                         "dfeEnabled": True,
                         "active": True,
-                        "lastSyncAt": db.SERVER_TIMESTAMP,
+                        "lastSyncAt": firestore.SERVER_TIMESTAMP,
                         "lastSyncOk": True,
                         "lastSyncError": None,
                     },
@@ -292,7 +293,7 @@ def route_sync_all():
                 results.append({"ok": False, "cuitRepresentada": c["cuit"], "message": str(e)})
                 ref.set(
                     {
-                        "lastSyncAt": db.SERVER_TIMESTAMP,
+                        "lastSyncAt": firestore.SERVER_TIMESTAMP,
                         "lastSyncOk": False,
                         "lastSyncError": str(e)[:400],
                     },
@@ -333,7 +334,7 @@ def route_sync_client():
                 "nombre": nombre,
                 "dfeEnabled": True,
                 "active": True,
-                "lastSyncAt": db.SERVER_TIMESTAMP,
+                "lastSyncAt": firestore.SERVER_TIMESTAMP,
                 "lastSyncOk": True,
                 "lastSyncError": None,
             },

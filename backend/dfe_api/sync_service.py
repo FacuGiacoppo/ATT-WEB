@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from dfe_service import consultar_comunicaciones, DfeServiceError
+from google.cloud import firestore  # type: ignore
 
 
 def _digits(s: str) -> str:
@@ -141,8 +142,8 @@ def sync_cuit_into_firestore(
                 "prioridad": r.get("prioridad"),
                 "fechaPublicacionMs": int(pub_ms or 0),
                 "fechaNotificacionMs": int(notif_ms) if notif_ms is not None else None,
-                "importedAt": db.SERVER_TIMESTAMP,
-                "lastSyncAt": db.SERVER_TIMESTAMP,
+                "importedAt": firestore.SERVER_TIMESTAMP,
+                "lastSyncAt": firestore.SERVER_TIMESTAMP,
             }
 
             ref = db.collection("dfe_comunicaciones").document(doc_id)
