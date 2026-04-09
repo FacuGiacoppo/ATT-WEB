@@ -100,6 +100,64 @@ def _get_bearer_token() -> str | None:
     return t or None
 
 
+def _normalize_dfe_request_path(path: str) -> str:
+    """Colapsa barras duplicadas y barra final para matchear rutas (ej. /api/dfe/sync/cron/)."""
+    parts = [x for x in (path or "").split("/") if x]
+    return "/" + "/".join(parts) if parts else "/"
+
+
+def _cron_sync_window_days() -> int:
+    """Ventana de consulta ARCA para el job programado (default 90 días)."""
+    raw = (os.environ.get("DFE_CRON_SYNC_DAYS") or "90").strip()
+    try:
+        return max(1, min(int(raw), 365))
+    except Exception:
+        return 90
+
+
+def _verify_cloud_scheduler_oidc(expected_audience: str) -> dict | None:
+    """
+    Valida el JWT que Cloud Scheduler adjunta al invocar Cloud Run (OIDC).
+    `expected_audience` debe ser la URL base del servicio (misma que --oidc-token-audience).
+    Opcional: DFE_CRON_SA_EMAIL restringe al mail exacto del service account.
+    """
+    # Logging seguro (no imprimir JWT).
+    if _auth_debug_enabled():
+        has_auth = bool((request.headers.get("Authorization") or "").strip())
+        _auth_log(f"cron oidc auth_header_present={has_auth}")
+        _auth_log(f"cron oidc expected_audience={expected_audience!r}")
+        _auth_log(f"cron oidc env DFE_CRON_SA_EMAIL={(os.environ.get('DFE_CRON_SA_EMAIL') or '').strip()!r}")
+
+    token = _get_bearer_token()
+    if not token:
+        _auth_log("cron oidc missing/invalid bearer (not 'Bearer <token>')")
+        return None
+    try:
+        from google.auth.transport import requests as ga_requests
+        from google.oauth2 import id_token as ga_id_token
+
+        info = ga_id_token.verify_oauth2_token(token, ga_requests.Request(), audience=expected_audience)
+        # Claims relevantes (no sensibles)
+        aud_claim = info.get("aud")
+        iss = str(info.get("iss") or "").rstrip("/")
+        sub = info.get("sub")
+        email = (info.get("email") or "").strip().lower()
+        _auth_log(f"cron oidc decoded aud={aud_claim!r} iss={iss!r} sub={sub!r} email={email!r}")
+
+        if iss not in ("https://accounts.google.com", "accounts.google.com"):
+            _auth_log(f"cron oidc denied: issuer mismatch iss={iss!r}")
+            return None
+        allow = (os.environ.get("DFE_CRON_SA_EMAIL") or "").strip().lower()
+        if allow and email != allow:
+            _auth_log(f"cron oidc denied: email mismatch got={email!r} expected={allow!r}")
+            return None
+        return {"sub": sub, "email": email}
+    except Exception as e:
+        _auth_log(f"cron oidc verify failed: {type(e).__name__} repr={e!r}")
+        traceback.print_exc()
+        return None
+
+
 _FIREBASE_ADMIN_READY = False
 
 
@@ -177,7 +235,13 @@ def _require_att_user() -> dict:
         if role not in _allowed_roles():
             _auth_log(f"profile role denied uid={uid!r} role={role!r}")
             raise DfeServiceError("forbidden", "Sin permiso para Consultas DFE.", http_status=403)
-        return {"uid": uid, "role": role, "name": data.get("name") or data.get("email") or uid}
+        token_email = (decoded.get("email") or data.get("email") or "").strip() or None
+        return {
+            "uid": uid,
+            "role": role,
+            "name": data.get("name") or data.get("email") or uid,
+            "email": token_email,
+        }
     except DfeServiceError:
         raise
     except Exception:
@@ -188,14 +252,47 @@ def _require_att_user() -> dict:
 @app.before_request
 def _auth_guard():
     # Proteger solo DFE
-    p = request.path or ""
-    if not p.startswith("/api/dfe/"):
+    p = _normalize_dfe_request_path(request.path or "")
+    if not (p.startswith("/api/dfe/") or p == "/api/dfe"):
         return None
     # Preflight CORS: no autenticar OPTIONS.
     if request.method == "OPTIONS":
         return None
     # Health público mínimo: no filtra config ni paths
     if p == "/api/dfe/health":
+        return None
+    # Cloud Scheduler → Cloud Run: SOLO Google OIDC (nunca Firebase Auth).
+    if p == "/api/dfe/sync/cron" and request.method == "POST":
+        aud = (os.environ.get("DFE_CRON_AUDIENCE") or "").strip()
+        if _auth_debug_enabled():
+            _auth_log("cron request received: /api/dfe/sync/cron (OIDC only, no Firebase)")
+            _auth_log(f"cron env DFE_CRON_AUDIENCE={aud!r}")
+            _auth_log(f"cron env DFE_CRON_SA_EMAIL={(os.environ.get('DFE_CRON_SA_EMAIL') or '').strip()!r}")
+            _auth_log(f"cron method={request.method!r} raw_path={request.path!r} normalized_path={p!r}")
+        if not aud:
+            _auth_log("cron denied: missing DFE_CRON_AUDIENCE")
+            return (
+                jsonify(
+                    sanitize(
+                        {
+                            "ok": False,
+                            "error": "config",
+                            "message": "Definí DFE_CRON_AUDIENCE en Cloud Run (URL del servicio, igual al audience del Scheduler).",
+                        }
+                    )
+                ),
+                503,
+            )
+        cron_claims = _verify_cloud_scheduler_oidc(aud)
+        if not cron_claims:
+            _auth_log("cron denied: OIDC invalid or not authorized (see previous logs)")
+            return jsonify(sanitize({"ok": False, "error": "auth", "message": "OIDC inválido o no autorizado."})), 401
+        request.att_user = {  # type: ignore[attr-defined]
+            "uid": f"cron:{cron_claims.get('sub') or 'unknown'}",
+            "role": "admin",
+            "name": "Cloud Scheduler",
+        }
+        _auth_log("cron allowed: OIDC verified")
         return None
     # Todo lo demás requiere token + rol
     try:
@@ -259,6 +356,54 @@ def _fs_client():
     return firestore.Client()
 
 
+def _run_bulk_sync_all_clients(*, window_days: int | None, sync_source: str) -> list[dict]:
+    """Recorre `dfe_clients` habilitados, persiste en `dfe_comunicaciones` y actualiza lastSync* por cliente."""
+    from sync_service import list_enabled_clients, sync_cuit_into_firestore
+
+    db = _fs_client()
+    clients = list_enabled_clients(db=db)
+    results: list[dict] = []
+    for c in clients:
+        ref = db.collection("dfe_clients").document(c["cuit"])
+        try:
+            r = sync_cuit_into_firestore(
+                db=db,
+                cuit_representada=c["cuit"],
+                nombre_cliente=c.get("nombre"),
+                window_days=window_days,
+            )
+            results.append({"ok": True, **r})
+            ref.set(
+                {
+                    "cuit": c["cuit"],
+                    "nombre": c.get("nombre"),
+                    "dfeEnabled": True,
+                    "active": True,
+                    "lastSyncAt": firestore.SERVER_TIMESTAMP,
+                    "lastSyncOk": True,
+                    "lastSyncError": None,
+                    "lastSyncFechaDesde": r.get("fechaDesde"),
+                    "lastSyncFechaHasta": r.get("fechaHasta"),
+                    "lastSyncWindowDays": r.get("windowDays"),
+                    "lastSyncUpserted": r.get("upserted"),
+                    "lastSyncSource": sync_source,
+                },
+                merge=True,
+            )
+        except Exception as e:
+            results.append({"ok": False, "cuitRepresentada": c["cuit"], "message": str(e)})
+            ref.set(
+                {
+                    "lastSyncAt": firestore.SERVER_TIMESTAMP,
+                    "lastSyncOk": False,
+                    "lastSyncError": str(e)[:400],
+                    "lastSyncSource": sync_source,
+                },
+                merge=True,
+            )
+    return results
+
+
 @app.post("/api/dfe/sync")
 def route_sync_all():
     """Sync manual masivo: recorre dfe_clients habilitados y persiste dfe_comunicaciones."""
@@ -266,40 +411,39 @@ def route_sync_all():
     if (u.get("role") or "") not in _sync_roles():
         return jsonify({"ok": False, "error": "forbidden", "message": "Sin permiso para sincronizar."}), 403
     try:
-        from sync_service import list_enabled_clients, sync_cuit_into_firestore
-
-        db = _fs_client()
-        clients = list_enabled_clients(db=db)
-        results = []
-        for c in clients:
-            # status por cliente
-            ref = db.collection("dfe_clients").document(c["cuit"])
-            try:
-                r = sync_cuit_into_firestore(db=db, cuit_representada=c["cuit"], nombre_cliente=c.get("nombre"))
-                results.append({"ok": True, **r})
-                ref.set(
-                    {
-                        "cuit": c["cuit"],
-                        "nombre": c.get("nombre"),
-                        "dfeEnabled": True,
-                        "active": True,
-                        "lastSyncAt": firestore.SERVER_TIMESTAMP,
-                        "lastSyncOk": True,
-                        "lastSyncError": None,
-                    },
-                    merge=True,
-                )
-            except Exception as e:
-                results.append({"ok": False, "cuitRepresentada": c["cuit"], "message": str(e)})
-                ref.set(
-                    {
-                        "lastSyncAt": firestore.SERVER_TIMESTAMP,
-                        "lastSyncOk": False,
-                        "lastSyncError": str(e)[:400],
-                    },
-                    merge=True,
-                )
+        results = _run_bulk_sync_all_clients(window_days=None, sync_source="manual")
         return jsonify({"ok": True, "count": len(results), "results": sanitize(results)})
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/sync/cron")
+def route_sync_cron():
+    """
+    Sync masivo para Cloud Scheduler + Cloud Run (OIDC).
+    Ventana de días: DFE_CRON_SYNC_DAYS (default 90). Requiere DFE_CRON_AUDIENCE = URL del servicio.
+    """
+    u = getattr(request, "att_user", None) or {}
+    if not str(u.get("uid") or "").startswith("cron:"):
+        return jsonify({"ok": False, "error": "forbidden", "message": "Solo invocable con OIDC de Scheduler."}), 403
+    try:
+        days = _cron_sync_window_days()
+        results = _run_bulk_sync_all_clients(window_days=days, sync_source="scheduler")
+        return jsonify(
+            sanitize(
+                {
+                    "ok": True,
+                    "count": len(results),
+                    "cronWindowDays": days,
+                    "source": "scheduler",
+                    "results": results,
+                }
+            )
+        )
     except DfeServiceError as e:
         p, st = _err_payload(e)
         return jsonify(sanitize(p)), st
@@ -337,6 +481,11 @@ def route_sync_client():
                 "lastSyncAt": firestore.SERVER_TIMESTAMP,
                 "lastSyncOk": True,
                 "lastSyncError": None,
+                "lastSyncFechaDesde": r.get("fechaDesde"),
+                "lastSyncFechaHasta": r.get("fechaHasta"),
+                "lastSyncWindowDays": r.get("windowDays"),
+                "lastSyncUpserted": r.get("upserted"),
+                "lastSyncSource": "manual",
             },
             merge=True,
         )
@@ -363,6 +512,378 @@ def route_whoami():
             }
         )
     )
+
+
+def _dfe_panel_log(action: str, *, doc_id: str | None = None, user: str | None = None) -> None:
+    parts = [f"[dfe] {action}"]
+    if doc_id is not None:
+        parts.append(f"doc_id={doc_id}")
+    if user is not None:
+        parts.append(f"user={user}")
+    print(" ".join(parts), flush=True)
+
+
+def _audit_actor_from_token() -> str:
+    """
+    Identificador para *leidaInternaPor* / *archivadaInternaPor*: email del token si existe, si no uid.
+    (Usuarios sin email en el JWT —p. ej. solo teléfono— siguen pudiendo actuar.)
+    """
+    u = getattr(request, "att_user", None) or {}
+    email = (u.get("email") or "").strip()
+    if email:
+        return email
+    uid = (u.get("uid") or "").strip()
+    if uid:
+        return uid
+    raise DfeServiceError(
+        "parametros",
+        "No se pudo determinar usuario (sin email ni uid en la sesión).",
+        http_status=400,
+    )
+
+
+def _assert_comunicacion_doc_id(doc_id: str) -> None:
+    from dfe_comunicaciones_model import parse_comunicacion_doc_id
+
+    if parse_comunicacion_doc_id(doc_id) is None:
+        raise DfeServiceError(
+            "parametros",
+            "doc_id inválido; formato esperado: {CUIT11}__{idComunicacion}.",
+            http_status=400,
+        )
+
+
+def _parse_query_bool(val: str | None, default: bool) -> bool:
+    if val is None or val == "":
+        return default
+    return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+
+@app.get("/api/dfe/comunicaciones")
+def route_comunicaciones_firestore_list():
+    """
+    Lista comunicaciones persistidas en Firestore (panel DFE).
+    Por defecto excluye archivadas internas (incluye documentos sin campo = no archivado).
+    """
+    try:
+        from dfe_comunicaciones_service import list_comunicaciones_firestore
+
+        u = getattr(request, "att_user", None) or {}
+        _dfe_panel_log("GET /api/dfe/comunicaciones", user=(u.get("email") or u.get("uid") or ""))
+
+        cuit = (request.args.get("cuit") or "").strip() or None
+        solo_nuevas = _parse_query_bool(request.args.get("soloNuevas"), False)
+        solo_archivadas = _parse_query_bool(request.args.get("soloArchivadas"), False)
+        solo_urgentes = _parse_query_bool(request.args.get("soloUrgentes"), False)
+        fecha_desde = (request.args.get("fechaDesde") or "").strip() or None
+        fecha_hasta = (request.args.get("fechaHasta") or "").strip() or None
+        try:
+            limit = int(request.args.get("limit") or "100")
+        except (TypeError, ValueError):
+            limit = 100
+
+        db = _fs_client()
+        items, meta = list_comunicaciones_firestore(
+            db=db,
+            cuit=cuit,
+            solo_nuevas=solo_nuevas,
+            solo_archivadas=solo_archivadas,
+            solo_urgentes=solo_urgentes,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            limit=limit,
+        )
+        return jsonify(
+            sanitize(
+                {
+                    "ok": True,
+                    "items": items,
+                    "total": len(items),
+                    "limit": meta.get("limit"),
+                    "scannedDocuments": meta.get("scannedDocuments"),
+                    "truncated": meta.get("truncated"),
+                }
+            )
+        )
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.get("/api/dfe/comunicaciones/nuevas")
+def route_comunicaciones_nuevas():
+    """Solo comunicaciones nuevas (no leídas internas y no archivadas)."""
+    try:
+        from dfe_comunicaciones_service import list_comunicaciones_nuevas_firestore
+
+        u = getattr(request, "att_user", None) or {}
+        _dfe_panel_log("GET /api/dfe/comunicaciones/nuevas", user=(u.get("email") or u.get("uid") or ""))
+
+        cuit = (request.args.get("cuit") or "").strip() or None
+        fecha_desde = (request.args.get("fechaDesde") or "").strip() or None
+        fecha_hasta = (request.args.get("fechaHasta") or "").strip() or None
+        try:
+            limit = int(request.args.get("limit") or "50")
+        except (TypeError, ValueError):
+            limit = 50
+
+        db = _fs_client()
+        items, meta = list_comunicaciones_nuevas_firestore(
+            db=db,
+            cuit=cuit,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            limit=limit,
+        )
+        return jsonify(
+            sanitize(
+                {
+                    "ok": True,
+                    "items": items,
+                    "total": len(items),
+                    "limit": meta.get("limit"),
+                    "scannedDocuments": meta.get("scannedDocuments"),
+                    "truncated": meta.get("truncated"),
+                }
+            )
+        )
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.get("/api/dfe/comunicaciones/<doc_id>")
+def route_comunicacion_get(doc_id: str):
+    """Una comunicación por doc_id Firestore (normalizada, incluye gestión interna)."""
+    try:
+        from dfe_comunicaciones_service import get_comunicacion_firestore
+
+        _assert_comunicacion_doc_id(doc_id)
+        u = getattr(request, "att_user", None) or {}
+        _dfe_panel_log("GET /api/dfe/comunicaciones/<id>", doc_id=doc_id, user=(u.get("email") or u.get("uid") or ""))
+        db = _fs_client()
+        item = get_comunicacion_firestore(db=db, doc_id=doc_id)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.get("/api/dfe/resumen")
+def route_dfe_resumen():
+    try:
+        from dfe_comunicaciones_service import compute_resumen
+
+        u = getattr(request, "att_user", None) or {}
+        _dfe_panel_log("GET /api/dfe/resumen", user=(u.get("email") or u.get("uid") or ""))
+
+        db = _fs_client()
+        data = compute_resumen(db=db)
+        return jsonify(sanitize({"ok": True, **data}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/estado-interno")
+def route_comunicacion_estado_interno(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import set_estado_interno_firestore
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        body = request.get_json(silent=True) or {}
+        estado = body.get("estadoInterno")
+        if not isinstance(estado, str):
+            return (
+                jsonify(
+                    sanitize(
+                        {"ok": False, "error": "parametros", "message": "Falta o es inválido estadoInterno (string)."}
+                    )
+                ),
+                400,
+            )
+        _dfe_panel_log("POST estado-interno", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = set_estado_interno_firestore(db=db, doc_id=doc_id, estado_interno=estado.strip(), actor=actor)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/asignar-responsable")
+def route_comunicacion_asignar_responsable(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import set_responsable_interno_firestore
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        body = request.get_json(silent=True) or {}
+        resp = body.get("responsableInterno")
+        if resp is not None and not isinstance(resp, str):
+            return (
+                jsonify(
+                    sanitize(
+                        {
+                            "ok": False,
+                            "error": "parametros",
+                            "message": "responsableInterno debe ser string o null.",
+                        }
+                    )
+                ),
+                400,
+            )
+        _dfe_panel_log("POST asignar-responsable", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = set_responsable_interno_firestore(db=db, doc_id=doc_id, responsable_interno=resp)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/observacion")
+def route_comunicacion_observacion(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import set_observacion_interna_firestore
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        body = request.get_json(silent=True) or {}
+        obs = body.get("observacionInterna")
+        if obs is not None and not isinstance(obs, str):
+            return (
+                jsonify(
+                    sanitize(
+                        {"ok": False, "error": "parametros", "message": "observacionInterna debe ser string."}
+                    )
+                ),
+                400,
+            )
+        _dfe_panel_log("POST observacion", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = set_observacion_interna_firestore(db=db, doc_id=doc_id, observacion_interna=obs)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/descartar-alerta")
+def route_comunicacion_descartar_alerta(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import descartar_alerta_visual
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        _dfe_panel_log("POST descartar-alerta", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = descartar_alerta_visual(db=db, doc_id=doc_id)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/marcar-leida")
+def route_comunicacion_marcar_leida(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import marcar_leida_interna
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        _dfe_panel_log("POST marcar-leida", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = marcar_leida_interna(db=db, doc_id=doc_id, user_email=actor)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/marcar-no-leida")
+def route_comunicacion_marcar_no_leida(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import marcar_no_leida_interna
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        _dfe_panel_log("POST marcar-no-leida", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = marcar_no_leida_interna(db=db, doc_id=doc_id, user_email=actor)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/archivar")
+def route_comunicacion_archivar(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import archivar_interna
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        _dfe_panel_log("POST archivar", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = archivar_interna(db=db, doc_id=doc_id, user_email=actor)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
+
+
+@app.post("/api/dfe/comunicaciones/<doc_id>/desarchivar")
+def route_comunicacion_desarchivar(doc_id: str):
+    try:
+        from dfe_comunicaciones_service import desarchivar_interna
+
+        _assert_comunicacion_doc_id(doc_id)
+        actor = _audit_actor_from_token()
+        _dfe_panel_log("POST desarchivar", doc_id=doc_id, user=actor)
+        db = _fs_client()
+        item = desarchivar_interna(db=db, doc_id=doc_id, user_email=actor)
+        return jsonify(sanitize({"ok": True, "item": item}))
+    except DfeServiceError as e:
+        p, st = _err_payload(e)
+        return jsonify(sanitize(p)), st
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
 
 
 @app.post("/api/dfe/comunicaciones")

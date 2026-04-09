@@ -17,6 +17,11 @@
   box-sizing: border-box;
 }
 
+/* Usado por varios módulos vía classList (DFE, operaciones, etc.) */
+.is-hidden {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: "DM Sans", sans-serif;

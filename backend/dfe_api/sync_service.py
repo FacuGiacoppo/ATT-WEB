@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import re
+from typing import Any
 from datetime import datetime, timedelta, timezone
 
+from dfe_comunicaciones_model import internal_defaults_for_create, internal_fields_for_new_document
 from dfe_service import consultar_comunicaciones, DfeServiceError
 from google.cloud import firestore  # type: ignore
 
@@ -39,7 +41,7 @@ def _parse_afip_date_ms(s: str | None) -> int | None:
         return None
 
 
-def _compute_window_days(default_days: int = 30) -> int:
+def _compute_window_days(default_days: int = 365) -> int:
     raw = (os.environ.get("DFE_SYNC_DAYS") or "").strip()
     if not raw:
         return default_days
@@ -77,18 +79,30 @@ def sync_cuit_into_firestore(
     db,
     cuit_representada: str,
     nombre_cliente: str | None,
+    window_days: int | None = None,
 ) -> dict:
     """
     Sincroniza comunicaciones de un CUIT desde ARCA/AFIP y las persiste en Firestore:
     - collection: dfe_comunicaciones
     - docId: {cuit}__{idComunicacion}
+
+    Incremental / sin duplicar filas: el id de documento es estable; cada sync hace merge=True
+    y actualiza campos (lastSyncAt en cada comunicación, estados, etc.).
+
+    :param window_days: si se informa, usa esta ventana (1..365). Si no, DFE_SYNC_DAYS o default interno.
     """
     cuit = _digits(cuit_representada)
     if len(cuit) != 11:
         raise DfeServiceError("parametros", "CUIT inválido para sync.", http_status=400)
 
     now = _now()
-    days = _compute_window_days()
+    if window_days is not None:
+        try:
+            days = max(1, min(int(window_days), 365))
+        except Exception:
+            days = _compute_window_days()
+    else:
+        days = _compute_window_days()
     fd = _date_yyyy_mm_dd(now - timedelta(days=days))
     fh = _date_yyyy_mm_dd(now)
 
@@ -105,7 +119,8 @@ def sync_cuit_into_firestore(
         if not rows:
             break
 
-        batch = db.batch()
+        refs = []
+        payloads: list[tuple[Any, dict]] = []
         for r in rows:
             idc = r.get("idComunicacion")
             try:
@@ -121,7 +136,7 @@ def sync_cuit_into_firestore(
             notif_ms = _parse_afip_date_ms(notif)
             newest_ms = max(newest_ms or 0, pub_ms or 0) if pub_ms else newest_ms
 
-            doc = {
+            doc_external = {
                 "schemaVersion": 1,
                 "source": "afip",
                 "cuitRepresentada": cuit,
@@ -147,8 +162,29 @@ def sync_cuit_into_firestore(
             }
 
             ref = db.collection("dfe_comunicaciones").document(doc_id)
-            # merge: no borramos campos previos (por si se agregan)
-            batch.set(ref, doc, merge=True)
+            refs.append(ref)
+            payloads.append((ref, doc_external))
+
+        snaps: dict[str, Any] = {}
+        if refs:
+            snaps = {s.id: s for s in db.get_all(refs)}
+        batch = db.batch()
+        for ref, doc_external in payloads:
+            snap = snaps.get(ref.id)
+            is_new = snap is None or not snap.exists
+            if is_new:
+                # Primera vez: internos + detección (alerta visual); updates no pisan estas claves.
+                batch.set(ref, {**doc_external, **internal_fields_for_new_document(firestore)}, merge=True)
+            else:
+                cur = (snap.to_dict() or {}) if snap else {}
+                missing_internal = {
+                    k: v for k, v in internal_defaults_for_create().items() if k not in cur
+                }
+                if missing_internal:
+                    # Docs previos al estado interno: completar solo claves faltantes.
+                    batch.set(ref, {**doc_external, **missing_internal}, merge=True)
+                else:
+                    batch.set(ref, doc_external, merge=True)
             total_upserted += 1
             total_seen += 1
 

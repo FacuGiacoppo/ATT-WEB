@@ -21,8 +21,10 @@ import { renderEstadoResultadosView } from "../modules/estado-resultados/estado-
 import { initEstadoResultadosPage } from "../modules/estado-resultados/estado-resultados.controller.js";
 import {
   renderConsultasDfeView,
-  initConsultasDfePage
+  initConsultasDfePage,
+  stopDfeInboxAutoRefresh,
 } from "../modules/consultas-dfe/consultas-dfe.controller.js";
+import { refreshDfeGlobalIndicators } from "../modules/consultas-dfe/dfe-global-indicators.js";
 import {
   canAccessCentralOperaciones,
   canAccessEstadoResultados,
@@ -70,6 +72,7 @@ export async function renderRoute() {
   }
 
   try {
+    stopDfeInboxAutoRefresh();
     app.innerHTML = renderAppLayout();
 
     const content = document.getElementById("main-content");
@@ -189,6 +192,10 @@ export async function renderRoute() {
           </div>
         </section>
       `;
+    }
+
+    if (canSeeModule(appState.session.user, "dfe")) {
+      refreshDfeGlobalIndicators().catch(() => {});
     }
   } catch (err) {
     console.error("renderRoute (sesión iniciada):", err);

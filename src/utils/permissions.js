@@ -21,10 +21,10 @@ export function canSeeModule(user, moduleName) {
   const role = getCurrentRole(user);
 
   const access = {
-    superadmin: ["inicio", "dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
-    admin: ["inicio", "dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
-    colaborador: ["inicio", "dashboard", "requerimientos", "operaciones", "users", "dfe"],
-    lectura: ["inicio", "dashboard", "users"],
+    superadmin: ["dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
+    admin: ["dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
+    colaborador: ["dashboard", "requerimientos", "operaciones", "users", "dfe"],
+    lectura: ["dashboard", "users"],
   };
 
   return access[role]?.includes(moduleName) ?? false;

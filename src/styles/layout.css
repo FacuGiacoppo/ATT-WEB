@@ -384,3 +384,76 @@
   color: var(--ink-light);
   font-size: 14px;
 }
+
+/* —— DFE: badge en sidebar + aviso discreto en Inicio (GET /api/dfe/resumen) —— */
+
+.sidebar-link--dfe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.sidebar-link-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.sidebar-badge--dfe {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.sidebar-badge--dfe.sidebar-badge--urgent {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.dfe-global-banner {
+  margin: 0 0 20px;
+  max-width: 520px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(26, 26, 46, 0.1);
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: var(--shadow);
+}
+
+.dfe-global-banner-text {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.dfe-global-banner-cta {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dfe-global-banner-cta:hover {
+  color: var(--accent-light);
+}

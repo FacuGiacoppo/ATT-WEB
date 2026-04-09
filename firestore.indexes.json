@@ -1,0 +1,57 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "dfe_comunicaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cuitRepresentada", "order": "ASCENDING" },
+        { "fieldPath": "fechaPublicacionMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dfe_comunicaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "archivadaInterna", "order": "ASCENDING" },
+        { "fieldPath": "fechaPublicacionMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dfe_comunicaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cuitRepresentada", "order": "ASCENDING" },
+        { "fieldPath": "archivadaInterna", "order": "ASCENDING" },
+        { "fieldPath": "fechaPublicacionMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dfe_comunicaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "leidaInterna", "order": "ASCENDING" },
+        { "fieldPath": "fechaPublicacionMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dfe_comunicaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cuitRepresentada", "order": "ASCENDING" },
+        { "fieldPath": "leidaInterna", "order": "ASCENDING" },
+        { "fieldPath": "fechaPublicacionMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dfe_comunicaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cuitRepresentada", "order": "ASCENDING" },
+        { "fieldPath": "archivadaInterna", "order": "ASCENDING" },
+        { "fieldPath": "leidaInterna", "order": "ASCENDING" },
+        { "fieldPath": "fechaPublicacionMs", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

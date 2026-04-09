@@ -1,0 +1,10 @@
+FIREBASE_PROJECT_ID: "att-web-2809"
+ARCA_ENV: "produccion"
+ARCA_WSAA_SERVICE: "veconsumerws"
+ARCA_CUIT_REPRESENTADA: "20123456789"
+ARCA_CERT_PATH: "/secrets/arca_cert/cert.pem"
+ARCA_KEY_PATH: "/secrets/arca_key/key.pem"
+DFE_ALLOWED_ROLES: "superadmin,admin,colaborador"
+DFE_SYNC_ROLES: "superadmin,admin"
+DFE_CORS_ORIGINS: "https://att-web-2809.web.app,https://att-web-2809.firebaseapp.com"
+

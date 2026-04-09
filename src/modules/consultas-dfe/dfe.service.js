@@ -145,3 +145,160 @@ export async function apiPostSyncClient(payload) {
   const body = await parseJson(res);
   return { ok: res.ok && body.ok !== false, status: res.status, ...body };
 }
+
+/**
+ * Panel DFE (Firestore vía API): listado con filtros.
+ * @param {{ cuit?: string, soloNuevas?: boolean, limit?: number }} filters
+ */
+export async function fetchComunicaciones(filters = {}) {
+  const base = getDfeApiBase();
+  const q = new URLSearchParams();
+  if (filters.cuit) q.set("cuit", String(filters.cuit).replace(/\D/g, ""));
+  if (filters.soloNuevas) q.set("soloNuevas", "true");
+  if (filters.soloUrgentes) q.set("soloUrgentes", "true");
+  if (filters.fechaDesde) q.set("fechaDesde", String(filters.fechaDesde));
+  if (filters.fechaHasta) q.set("fechaHasta", String(filters.fechaHasta));
+  if (filters.limit != null) q.set("limit", String(filters.limit));
+  const qs = q.toString();
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones${qs ? `?${qs}` : ""}`);
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+/**
+ * Bandeja solo “nuevas” (regla interna ATT). Opcional: cuit, fechas, limit.
+ */
+export async function fetchComunicacionesNuevas(filters = {}) {
+  const base = getDfeApiBase();
+  const q = new URLSearchParams();
+  if (filters.cuit) q.set("cuit", String(filters.cuit).replace(/\D/g, ""));
+  if (filters.fechaDesde) q.set("fechaDesde", String(filters.fechaDesde));
+  if (filters.fechaHasta) q.set("fechaHasta", String(filters.fechaHasta));
+  if (filters.limit != null) q.set("limit", String(filters.limit));
+  const qs = q.toString();
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/nuevas${qs ? `?${qs}` : ""}`);
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function fetchResumen() {
+  const base = getDfeApiBase();
+  const res = await authedFetch(`${base}/api/dfe/resumen`);
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+/** Una sola petición GET /resumen si varios consumidores la piden a la vez (sidebar + panel DFE). */
+let dfeResumenFetchInFlight = null;
+
+export function fetchResumenDeduped() {
+  if (dfeResumenFetchInFlight) return dfeResumenFetchInFlight;
+  dfeResumenFetchInFlight = fetchResumen().finally(() => {
+    dfeResumenFetchInFlight = null;
+  });
+  return dfeResumenFetchInFlight;
+}
+
+export async function fetchComunicacionByDocId(docId) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}`);
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function postEstadoInterno(docId, estadoInterno) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/estado-interno`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ estadoInterno: String(estadoInterno || "").trim() }),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function postAsignarResponsable(docId, responsableInterno) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/asignar-responsable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ responsableInterno: responsableInterno == null ? null : String(responsableInterno) }),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function postObservacionInterna(docId, observacionInterna) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/observacion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ observacionInterna: observacionInterna == null ? "" : String(observacionInterna) }),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function marcarLeida(docId) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/marcar-leida`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function marcarNoLeida(docId) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/marcar-no-leida`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function archivar(docId) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/archivar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function desarchivar(docId) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/desarchivar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}
+
+export async function descartarAlerta(docId) {
+  const base = getDfeApiBase();
+  const enc = encodeURIComponent(docId);
+  const res = await authedFetch(`${base}/api/dfe/comunicaciones/${enc}/descartar-alerta`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const body = await parseJson(res);
+  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+}

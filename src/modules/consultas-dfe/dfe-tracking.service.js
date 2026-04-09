@@ -1,4 +1,9 @@
-import { doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  Timestamp,
+} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
 import { db } from "../../config/firebase.js";
 import { COLLAB_MODULES, COLLAB_EVENTS } from "../../services/collaboration/constants.js";
@@ -59,6 +64,8 @@ export async function markViewedInApp({ cuitRepresentada, idComunicacion, user }
     (prev, u) => {
       const a = collabActorFromUser(u);
       const now = serverTimestamp();
+      // Firestore no permite serverTimestamp() dentro de elementos de array.
+      const readAt = Timestamp.now();
       const prevReaders = Array.isArray(prev?.readers) ? prev.readers : [];
       const uid = a.uid || null;
       if (uid && prevReaders.some((r) => r?.uid === uid)) {
@@ -69,7 +76,7 @@ export async function markViewedInApp({ cuitRepresentada, idComunicacion, user }
         uid: a.uid,
         name: a.name,
         role: a.role,
-        firstReadAt: now,
+        firstReadAt: readAt,
       };
       return {
         cuitRepresentada: c,
@@ -179,7 +186,7 @@ export async function addComment({ cuitRepresentada, idComunicacion, text, user 
       const comment = {
         id,
         text: t.slice(0, 2000),
-        createdAt: now,
+        createdAt: Timestamp.now(),
         createdByUid: a.uid,
         createdByName: a.name,
         createdByRole: a.role,
