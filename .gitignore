@@ -6,6 +6,10 @@
 # Credenciales Firebase Admin (¡NUNCA subir!)
 serviceAccountKey.json
 *serviceAccount*.json
+secrets/
+
+# Firebase CLI cache local
+.firebase/
 
 # Node
 node_modules/
@@ -34,4 +38,3 @@ __pycache__/
 .Python
 venv/
 .env
-secrets/

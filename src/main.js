@@ -8,8 +8,16 @@ function siteBaseForModules() {
   return `${location.origin}${href}`;
 }
 
+/** Misma versión que `main.js` e `index.html` (`window.__ATT_APP_BUILD__`). */
+function appBuildVersion() {
+  if (typeof window !== "undefined" && window.__ATT_APP_BUILD__) {
+    return String(window.__ATT_APP_BUILD__);
+  }
+  return "20260411-24";
+}
+
 function bootstrapModuleUrl() {
-  return new URL("src/app/bootstrap.js?v=20260409-30", siteBaseForModules()).href;
+  return new URL(`src/app/bootstrap.js?v=${appBuildVersion()}`, siteBaseForModules()).href;
 }
 
 function showModuleLoadError(err) {

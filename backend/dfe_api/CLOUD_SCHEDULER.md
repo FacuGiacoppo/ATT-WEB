@@ -21,14 +21,15 @@ Objetivo: ejecutar **cada 1 hora** un sync masivo contra ARCA y volcar en Firest
 
 El sync **manual** desde la app sigue usando `POST /api/dfe/sync` con Firebase ID token y respeta `DFE_SYNC_DAYS` / default de `sync_service`.
 
-## Incrementalidad y `lastSyncAt`
+## Incrementalidad y metadatos de sync
 
 - Cada comunicación se guarda en `dfe_comunicaciones` con id **`{CUIT}__{idComunicacion}`** y **`merge=True`**: no se duplican documentos; se actualizan campos en cada corrida.
-- Por cliente, en **`dfe_clients/{cuit}`** se escribe (entre otros):
-  - `lastSyncAt` (timestamp servidor)
-  - `lastSyncOk`, `lastSyncError`
-  - `lastSyncFechaDesde`, `lastSyncFechaHasta`, `lastSyncWindowDays`, `lastSyncUpserted`
-  - `lastSyncSource`: `scheduler` | `manual`
+- **Fuente de CUITs a sincronizar:** la colección **`clientes`**, con **`dfeEnabled == true`** (y CUIT válido de 11 dígitos). Ver `DFE_CLIENTES_SOURCE.md`.
+- **Metadatos por corrida** en la ficha del cliente (`clientes/{id}`):
+  - `dfeLastSyncAt`, `dfeLastSyncOk`, `dfeLastSyncError`
+  - `dfeLastSyncFechaDesde`, `dfeLastSyncFechaHasta`, `dfeLastSyncWindowDays`, `dfeLastSyncUpserted`
+  - `dfeLastSyncSource`: `scheduler` | `manual`
+- **Migración:** si `DFE_USE_LEGACY_DFE_CLIENTS` no está en `0/false`, se pueden incluir CUITs que solo existan en **`dfe_clients`** (comportamiento anterior). Los metadatos legacy siguen usando `lastSync*` en `dfe_clients/{cuit}`.
 
 ## Ejemplo: crear job (cada hora)
 
@@ -77,4 +78,4 @@ Probar una corrida manual:
 gcloud scheduler jobs run dfe-sync-hourly --project="${PROJECT_ID}" --location="${REGION}"
 ```
 
-Revisá logs del servicio Cloud Run y documentos en `dfe_clients` / `dfe_comunicaciones`.
+Revisá logs del servicio Cloud Run y documentos en `clientes` (DFE) / `dfe_comunicaciones`. Si aún usás fallback, también `dfe_clients`.

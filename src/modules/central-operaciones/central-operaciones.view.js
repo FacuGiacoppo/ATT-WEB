@@ -1,5 +1,5 @@
 import { appState } from "../../app/state.js";
-import { buildMultiFilterOpts, renderMultiFilter } from "../operaciones/operaciones.view.js";
+import { buildMultiFilterOpts, renderMultiFilter } from "../operaciones/operaciones-multi-filter.js";
 
 function escapeHtml(v) {
   return String(v ?? "")

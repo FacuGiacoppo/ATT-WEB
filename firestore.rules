@@ -30,6 +30,10 @@ service cloud.firestore {
          getUserRole() == "colaborador");
     }
 
+    function clienteDfeTrue(data) {
+      return 'dfeEnabled' in data && data.dfeEnabled == true;
+    }
+
     // =========================
     // USERS
     // =========================
@@ -101,8 +105,12 @@ service cloud.firestore {
     match /clientes/{docId} {
 
       allow read: if canColab();
-      allow create: if canColab();
-      allow update: if canColab();
+      // Solo superadmin puede dar de alta DFE activo (delegación ARCA).
+      allow create: if canColab() && (isSuperadmin() || !clienteDfeTrue(request.resource.data));
+      allow update: if canColab() && (
+        isSuperadmin() ||
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['dfeEnabled'])
+      );
 
       // Solo superadmin puede eliminar
       allow delete: if isSuperadmin();
@@ -144,7 +152,7 @@ service cloud.firestore {
     // DFE inbox (datos externos ARCA/AFIP persistidos)
     // =========================
 
-    // Config de clientes habilitados para sync DFE.
+    // Legacy: config de clientes solo en DFE (migración). La fuente principal es `clientes` + dfeEnabled.
     // DocID recomendado: CUIT (11 dígitos).
     match /dfe_clients/{cuit} {
       allow read: if canColab();

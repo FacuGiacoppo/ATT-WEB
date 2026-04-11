@@ -1,0 +1,823 @@
+/* Obligaciones plan-in — módulo paralelo (no reemplaza operaciones legacy) */
+
+.oplan-page {
+  display: grid;
+  gap: 18px;
+  max-width: 1100px;
+}
+
+.oplan-hero {
+  margin-bottom: 0;
+}
+
+.oplan-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(59, 91, 140, 0.08);
+  border: 1px solid rgba(59, 91, 140, 0.2);
+}
+
+.oplan-compare-pill {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2c5282;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.oplan-compare-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.45;
+  flex: 1;
+  min-width: 200px;
+}
+
+.oplan-h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.oplan-step-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.oplan-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: white;
+  border-radius: 14px;
+  border: 1px solid rgba(26, 26, 46, 0.08);
+  box-shadow: var(--shadow);
+}
+
+.oplan-step-n {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: rgba(200, 71, 42, 0.12);
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+}
+
+.oplan-step strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
+  color: var(--ink);
+}
+
+.oplan-step p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.5;
+}
+
+.oplan-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.oplan-step--active {
+  border-color: rgba(200, 71, 42, 0.22);
+  box-shadow: 0 2px 14px rgba(200, 71, 42, 0.08);
+}
+
+.oplan-client-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 12px;
+}
+
+.oplan-client-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.oplan-select-cliente {
+  min-width: min(100%, 320px);
+  flex: 1;
+  max-width: 420px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(26, 26, 46, 0.14);
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.oplan-select-cliente:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.oplan-cliente-status {
+  margin: 10px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2d4a7c;
+}
+
+.oplan-cliente-status.is-hidden {
+  display: none;
+}
+
+/* Panel “asignados” (tipo versión anterior) */
+.oplan-panel-section {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: white;
+  border: 1px solid rgba(26, 26, 46, 0.1);
+  box-shadow: var(--shadow);
+}
+
+.oplan-panel-head .oplan-h2 {
+  margin-bottom: 6px;
+}
+
+.oplan-panel-intro {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.5;
+  max-width: 900px;
+}
+
+.oplan-save-status {
+  margin: 8px 0 0;
+  min-height: 1.25em;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.oplan-save-status.is-ok {
+  color: #276749;
+}
+
+.oplan-save-status.is-error {
+  color: #c53030;
+}
+
+/* Carrito + columnas (drag-and-drop) */
+.oplan-dispatch {
+  margin-top: 4px;
+}
+
+.oplan-dispatch-row {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .oplan-dispatch-row {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .oplan-cart {
+    flex: 0 0 280px;
+    max-width: 100%;
+  }
+
+  .oplan-team-board {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.oplan-cart {
+  border-radius: 12px;
+  border: 2px dashed rgba(200, 71, 42, 0.35);
+  background: rgba(200, 71, 42, 0.04);
+  padding: 12px 14px;
+  min-height: 140px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.oplan-cart.oplan-drop-zone.is-drag-over {
+  background: rgba(200, 71, 42, 0.1);
+  border-color: var(--accent);
+}
+
+.oplan-cart-head {
+  margin-bottom: 10px;
+}
+
+.oplan-cart-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.oplan-cart-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.oplan-team-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.oplan-team-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.oplan-team-cols {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+
+.oplan-user-col {
+  flex: 0 0 200px;
+  scroll-snap-align: start;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 26, 46, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  min-height: 120px;
+  max-height: min(50vh, 420px);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.oplan-user-col.oplan-drop-zone.is-drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(200, 71, 42, 0.2);
+}
+
+.oplan-user-col-head {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(26, 26, 46, 0.08);
+  background: rgba(59, 91, 140, 0.08);
+  color: #2c5282;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oplan-user-col-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oplan-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.oplan-item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(26, 26, 46, 0.12);
+  background: white;
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(26, 26, 46, 0.06);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.oplan-item-card:active {
+  cursor: grabbing;
+}
+
+.oplan-item-card.is-dragging {
+  opacity: 0.55;
+}
+
+.oplan-item-card-name {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.oplan-item-card-venc {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.oplan-board-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.45;
+}
+
+.oplan-board-empty--muted {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.oplan-orphan-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px dashed rgba(26, 26, 46, 0.2);
+  background: rgba(26, 26, 46, 0.03);
+}
+
+.oplan-orphan-email {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: ui-monospace, Menlo, monospace;
+  color: var(--ink-muted);
+}
+
+.oplan-orphan-note {
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: 1.35;
+}
+
+.oplan-summary-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(26, 26, 46, 0.08);
+}
+
+.oplan-summary-intro {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.oplan-panel-scroll--summary {
+  max-height: min(45vh, 400px);
+}
+
+.oplan-panel-resp-list {
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.oplan-panel-scroll {
+  overflow: auto;
+  max-height: min(40vh, 360px);
+  border-radius: 12px;
+  border: 1px solid rgba(26, 26, 46, 0.08);
+  background: rgba(26, 26, 46, 0.02);
+}
+
+.oplan-panel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.oplan-panel-table thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 800;
+  color: var(--ink-muted);
+  background: rgba(26, 26, 46, 0.05);
+  border-bottom: 1px solid rgba(26, 26, 46, 0.1);
+  white-space: nowrap;
+}
+
+.oplan-panel-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(26, 26, 46, 0.06);
+  vertical-align: middle;
+}
+
+.oplan-panel-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.oplan-panel-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.oplan-panel-venc {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.oplan-panel-resp select {
+  min-width: 11rem;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(26, 26, 46, 0.14);
+  background: var(--paper);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.oplan-panel-resp select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.oplan-panel-empty td {
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.45;
+  padding: 14px 12px;
+}
+
+.oplan-ot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(26, 26, 46, 0.04);
+  border: 1px solid rgba(26, 26, 46, 0.08);
+}
+
+.oplan-ot-badge {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  background: rgba(59, 91, 140, 0.2);
+  color: #2c5282;
+}
+
+.oplan-ot-badge--t {
+  background: rgba(200, 71, 42, 0.15);
+  color: var(--accent);
+}
+
+.oplan-ot-text {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.45;
+}
+
+.oplan-ot-text strong {
+  color: var(--ink);
+}
+
+.oplan-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.oplan-card {
+  background: white;
+  border-radius: 14px;
+  padding: 16px 18px;
+  border: 1px solid rgba(26, 26, 46, 0.08);
+  box-shadow: var(--shadow);
+}
+
+.oplan-h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.oplan-ul {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.55;
+}
+
+.oplan-ul li {
+  margin-bottom: 6px;
+}
+
+.oplan-placeholder {
+  text-align: center;
+  padding: 28px 20px;
+  border-radius: 14px;
+  border: 1px dashed rgba(26, 26, 46, 0.18);
+  background: rgba(26, 26, 46, 0.02);
+}
+
+.oplan-placeholder-icon {
+  font-size: 28px;
+  opacity: 0.45;
+  margin-bottom: 8px;
+}
+
+.oplan-placeholder-title {
+  margin: 0 0 6px;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.oplan-placeholder-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+  max-width: 480px;
+  margin-inline: auto;
+  line-height: 1.5;
+}
+
+/* —— Catálogo maestro —— */
+.oplan-master {
+  display: grid;
+  gap: 12px;
+}
+
+.oplan-master-head .oplan-h2 {
+  margin-bottom: 6px;
+}
+
+.oplan-master-intro {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-light);
+  line-height: 1.5;
+  max-width: 900px;
+}
+
+.oplan-master-xlsx {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.oplan-maestro-xlsx-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(200, 71, 42, 0.35);
+  padding-bottom: 1px;
+}
+
+.oplan-maestro-xlsx-link:hover {
+  color: var(--accent-light);
+  border-bottom-color: rgba(200, 71, 42, 0.55);
+}
+
+.oplan-maestro-xlsx-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.oplan-code {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  padding: 0.1em 0.35em;
+  background: rgba(26, 26, 46, 0.06);
+  border-radius: 4px;
+}
+
+.oplan-master-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.oplan-filter {
+  appearance: none;
+  border: 1px solid rgba(26, 26, 46, 0.14);
+  background: white;
+  color: var(--ink-light);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.oplan-filter:hover {
+  border-color: rgba(26, 26, 46, 0.28);
+  color: var(--ink);
+}
+
+.oplan-filter.is-active {
+  background: rgba(200, 71, 42, 0.12);
+  border-color: rgba(200, 71, 42, 0.35);
+  color: var(--accent);
+}
+
+.oplan-filter-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(26, 26, 46, 0.12);
+  margin: 0 4px;
+}
+
+.oplan-master-scroll {
+  overflow: auto;
+  max-height: min(60vh, 520px);
+  border-radius: 12px;
+  border: 1px solid rgba(26, 26, 46, 0.1);
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.oplan-master-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.oplan-master-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 800;
+  color: var(--ink-muted);
+  background: rgba(26, 26, 46, 0.05);
+  border-bottom: 1px solid rgba(26, 26, 46, 0.1);
+  white-space: nowrap;
+}
+
+.oplan-th-type {
+  width: 44px;
+}
+
+.oplan-th-check {
+  width: 36px;
+  text-align: center;
+}
+
+.oplan-td-check {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.oplan-td-check .oplan-cb {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.oplan-td-check .oplan-cb:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.oplan-th-venc {
+  min-width: 6.5rem;
+}
+
+.oplan-td-venc {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.oplan-placeholder--done {
+  border-style: solid;
+  border-color: rgba(59, 91, 140, 0.2);
+  background: rgba(59, 91, 140, 0.04);
+}
+
+.oplan-th-rubro {
+  min-width: 10rem;
+  max-width: 22rem;
+  white-space: normal;
+}
+
+.oplan-master-rubro {
+  font-size: 12px;
+  color: var(--ink-light);
+  white-space: normal;
+  max-width: min(40vw, 360px);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.oplan-master-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(26, 26, 46, 0.06);
+  vertical-align: top;
+}
+
+.oplan-master-table tbody tr:nth-child(even) {
+  background: rgba(26, 26, 46, 0.02);
+}
+
+.oplan-master-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.oplan-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.oplan-badge--o {
+  background: rgba(59, 91, 140, 0.18);
+  color: #2c5282;
+}
+
+.oplan-badge--t {
+  background: rgba(200, 71, 42, 0.15);
+  color: var(--accent);
+}
+
+.oplan-td-muted {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Etiqueta menú: “Nueva versión” sobre el link */
+.sidebar-label-beta {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-light);
+  padding-left: 13px;
+  margin-bottom: 2px;
+  opacity: 0.95;
+}
+
+.sidebar-link--oplan {
+  font-size: 13px;
+  line-height: 1.25;
+}

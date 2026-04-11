@@ -99,15 +99,32 @@ export function bindBandejaCumplimientosEvents() {
   bcEventsBound = true;
 
   document.addEventListener("click", (event) => {
-    const mfilterAll = event.target.closest("[data-mfilter-all]");
-    if (mfilterAll && mfilterAll.closest("#bc-filters-row")) {
+    const mfilterClear = event.target.closest("[data-mfilter-clear]");
+    if (mfilterClear && mfilterClear.closest("#bc-filters-row")) {
       event.preventDefault();
-      const filterId = mfilterAll.dataset.mfilterAll;
+      const filterId = mfilterClear.dataset.mfilterClear;
+      const stateKey = BC_FILTER_ID_TO_STATE_KEY[filterId];
+      if (stateKey) {
+        setState(`bandejaCumplimientos.${stateKey}`, []);
+        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
+          c.checked = false;
+        });
+        updateBcFilterBadge(filterId, []);
+        paintBandejaRows();
+      }
+      return;
+    }
+
+    const mfilterVisible = event.target.closest("[data-mfilter-visible]");
+    if (mfilterVisible && mfilterVisible.closest("#bc-filters-row")) {
+      event.preventDefault();
+      const filterId = mfilterVisible.dataset.mfilterVisible;
       const stateKey = BC_FILTER_ID_TO_STATE_KEY[filterId];
       const optsEl = document.getElementById(`${filterId}-opts`);
       if (stateKey && optsEl) {
         const selected = [];
         optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
+          if (row.classList.contains("op-mfilter-opt--hidden")) return;
           const inp = row.querySelector("input[type='checkbox']");
           if (inp) {
             inp.checked = true;
@@ -120,22 +137,6 @@ export function bindBandejaCumplimientosEvents() {
         });
         setState(`bandejaCumplimientos.${stateKey}`, selected);
         updateBcFilterBadge(filterId, selected);
-        paintBandejaRows();
-      }
-      return;
-    }
-
-    const mfilterClear = event.target.closest("[data-mfilter-clear]");
-    if (mfilterClear && mfilterClear.closest("#bc-filters-row")) {
-      event.preventDefault();
-      const filterId = mfilterClear.dataset.mfilterClear;
-      const stateKey = BC_FILTER_ID_TO_STATE_KEY[filterId];
-      if (stateKey) {
-        setState(`bandejaCumplimientos.${stateKey}`, []);
-        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
-          c.checked = false;
-        });
-        updateBcFilterBadge(filterId, []);
         paintBandejaRows();
       }
       return;

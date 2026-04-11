@@ -357,56 +357,54 @@ def _fs_client():
 
 
 def _run_bulk_sync_all_clients(*, window_days: int | None, sync_source: str) -> list[dict]:
-    """Recorre `dfe_clients` habilitados, persiste en `dfe_comunicaciones` y actualiza lastSync* por cliente."""
-    from sync_service import list_enabled_clients, sync_cuit_into_firestore
+    """Recorre clientes con DFE habilitado (`clientes.dfeEnabled`), persiste `dfe_comunicaciones` y metadatos `dfeLastSync*`."""
+    from sync_service import list_enabled_clients, sync_cuit_into_firestore, write_sync_metadata_after_cuit_sync
 
     db = _fs_client()
     clients = list_enabled_clients(db=db)
     results: list[dict] = []
     for c in clients:
-        ref = db.collection("dfe_clients").document(c["cuit"])
+        cuit = c["cuit"]
+        nombre = c.get("nombre")
+        cliente_doc_id = c.get("cliente_doc_id")
         try:
             r = sync_cuit_into_firestore(
                 db=db,
-                cuit_representada=c["cuit"],
-                nombre_cliente=c.get("nombre"),
+                cuit_representada=cuit,
+                nombre_cliente=nombre,
                 window_days=window_days,
             )
             results.append({"ok": True, **r})
-            ref.set(
-                {
-                    "cuit": c["cuit"],
-                    "nombre": c.get("nombre"),
-                    "dfeEnabled": True,
-                    "active": True,
-                    "lastSyncAt": firestore.SERVER_TIMESTAMP,
-                    "lastSyncOk": True,
-                    "lastSyncError": None,
-                    "lastSyncFechaDesde": r.get("fechaDesde"),
-                    "lastSyncFechaHasta": r.get("fechaHasta"),
-                    "lastSyncWindowDays": r.get("windowDays"),
-                    "lastSyncUpserted": r.get("upserted"),
-                    "lastSyncSource": sync_source,
-                },
-                merge=True,
+            write_sync_metadata_after_cuit_sync(
+                db,
+                cuit=cuit,
+                nombre=nombre,
+                cliente_doc_id=cliente_doc_id,
+                ok=True,
+                err=None,
+                r=r,
+                sync_source=sync_source,
+                allow_lookup_cliente_by_cuit11=False,
             )
         except Exception as e:
-            results.append({"ok": False, "cuitRepresentada": c["cuit"], "message": str(e)})
-            ref.set(
-                {
-                    "lastSyncAt": firestore.SERVER_TIMESTAMP,
-                    "lastSyncOk": False,
-                    "lastSyncError": str(e)[:400],
-                    "lastSyncSource": sync_source,
-                },
-                merge=True,
+            results.append({"ok": False, "cuitRepresentada": cuit, "message": str(e)})
+            write_sync_metadata_after_cuit_sync(
+                db,
+                cuit=cuit,
+                nombre=nombre,
+                cliente_doc_id=cliente_doc_id,
+                ok=False,
+                err=str(e),
+                r={},
+                sync_source=sync_source,
+                allow_lookup_cliente_by_cuit11=False,
             )
     return results
 
 
 @app.post("/api/dfe/sync")
 def route_sync_all():
-    """Sync manual masivo: recorre dfe_clients habilitados y persiste dfe_comunicaciones."""
+    """Sync manual masivo: recorre clientes con `dfeEnabled` (y fallback legacy opcional) y persiste `dfe_comunicaciones`."""
     u = getattr(request, "att_user", None) or {}
     if (u.get("role") or "") not in _sync_roles():
         return jsonify({"ok": False, "error": "forbidden", "message": "Sin permiso para sincronizar."}), 403
@@ -454,46 +452,66 @@ def route_sync_cron():
 
 @app.post("/api/dfe/sync-client")
 def route_sync_client():
-    """Sync manual por CUIT: body { cuitRepresentada, nombreCliente? }."""
+    """Sync manual por CUIT: body { cuitRepresentada, nombreCliente? }. Metadatos en `clientes` si hay `cuit11` o doc resuelto."""
     u = getattr(request, "att_user", None) or {}
     if (u.get("role") or "") not in _sync_roles():
         return jsonify({"ok": False, "error": "forbidden", "message": "Sin permiso para sincronizar."}), 403
     body = request.get_json(silent=True) or {}
     cuit = (body.get("cuitRepresentada") or "").strip()
     nombre = (body.get("nombreCliente") or "").strip() or None
-    try:
-        from sync_service import sync_cuit_into_firestore
+    from sync_service import (
+        cuit_digits,
+        find_cliente_doc_ref_for_cuit,
+        sync_cuit_into_firestore,
+        write_sync_metadata_after_cuit_sync,
+    )
 
-        _auth_log(
-            f"sync-client requested by uid={u.get('uid')!r} role={u.get('role')!r} cuitRepresentada={cuit!r}"
+    _auth_log(
+        f"sync-client requested by uid={u.get('uid')!r} role={u.get('role')!r} cuitRepresentada={cuit!r}"
+    )
+    db = _fs_client()
+    cuit_d = cuit_digits(cuit)
+
+    def _write_fail(err: Exception) -> None:
+        if len(cuit_d) != 11:
+            return
+        cref = find_cliente_doc_ref_for_cuit(db, cuit_d)
+        write_sync_metadata_after_cuit_sync(
+            db,
+            cuit=cuit_d,
+            nombre=nombre,
+            cliente_doc_id=cref.id if cref else None,
+            ok=False,
+            err=str(err),
+            r={},
+            sync_source="manual",
+            allow_lookup_cliente_by_cuit11=True,
         )
-        db = _fs_client()
+
+    try:
         r = sync_cuit_into_firestore(db=db, cuit_representada=cuit, nombre_cliente=nombre)
         _auth_log(
             f"sync-client result cuit={r.get('cuitRepresentada')!r} upserted={r.get('upserted')!r} windowDays={r.get('windowDays')!r}"
         )
-        db.collection("dfe_clients").document(r["cuitRepresentada"]).set(
-            {
-                "cuit": r["cuitRepresentada"],
-                "nombre": nombre,
-                "dfeEnabled": True,
-                "active": True,
-                "lastSyncAt": firestore.SERVER_TIMESTAMP,
-                "lastSyncOk": True,
-                "lastSyncError": None,
-                "lastSyncFechaDesde": r.get("fechaDesde"),
-                "lastSyncFechaHasta": r.get("fechaHasta"),
-                "lastSyncWindowDays": r.get("windowDays"),
-                "lastSyncUpserted": r.get("upserted"),
-                "lastSyncSource": "manual",
-            },
-            merge=True,
+        cref = find_cliente_doc_ref_for_cuit(db, r["cuitRepresentada"])
+        write_sync_metadata_after_cuit_sync(
+            db,
+            cuit=r["cuitRepresentada"],
+            nombre=nombre,
+            cliente_doc_id=cref.id if cref else None,
+            ok=True,
+            err=None,
+            r=r,
+            sync_source="manual",
+            allow_lookup_cliente_by_cuit11=True,
         )
         return jsonify(sanitize({"ok": True, "result": r}))
     except DfeServiceError as e:
+        _write_fail(e)
         p, st = _err_payload(e)
         return jsonify(sanitize(p)), st
     except Exception as e:
+        _write_fail(e)
         traceback.print_exc()
         return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
 
@@ -559,12 +577,13 @@ def _parse_query_bool(val: str | None, default: bool) -> bool:
     return str(val).strip().lower() in ("1", "true", "yes", "on")
 
 
-@app.get("/api/dfe/comunicaciones")
+@app.route("/api/dfe/comunicaciones", methods=["GET"])
 def route_comunicaciones_firestore_list():
     """
     Lista comunicaciones persistidas en Firestore (panel DFE).
     Por defecto excluye archivadas internas (incluye documentos sin campo = no archivado).
     """
+    print("[DFE API] endpoint hit: /api/dfe/comunicaciones", flush=True)
     try:
         from dfe_comunicaciones_service import list_comunicaciones_firestore
 
@@ -574,6 +593,7 @@ def route_comunicaciones_firestore_list():
         cuit = (request.args.get("cuit") or "").strip() or None
         solo_nuevas = _parse_query_bool(request.args.get("soloNuevas"), False)
         solo_archivadas = _parse_query_bool(request.args.get("soloArchivadas"), False)
+        bandeja_completa = _parse_query_bool(request.args.get("bandejaCompleta"), False)
         solo_urgentes = _parse_query_bool(request.args.get("soloUrgentes"), False)
         fecha_desde = (request.args.get("fechaDesde") or "").strip() or None
         fecha_hasta = (request.args.get("fechaHasta") or "").strip() or None
@@ -592,6 +612,7 @@ def route_comunicaciones_firestore_list():
             fecha_desde=fecha_desde,
             fecha_hasta=fecha_hasta,
             limit=limit,
+            incluir_archivadas_en_listado=bandeja_completa,
         )
         return jsonify(
             sanitize(
@@ -678,8 +699,9 @@ def route_comunicacion_get(doc_id: str):
         return jsonify(sanitize({"ok": False, "error": "interno", "message": str(e)})), 500
 
 
-@app.get("/api/dfe/resumen")
+@app.route("/api/dfe/resumen", methods=["GET"])
 def route_dfe_resumen():
+    print("[DFE API] endpoint hit: /resumen", flush=True)
     try:
         from dfe_comunicaciones_service import compute_resumen
 

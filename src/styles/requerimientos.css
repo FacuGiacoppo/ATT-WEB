@@ -7,9 +7,9 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
-  padding: 24px 28px;
-  border-radius: 18px;
+  gap: 16px;
+  padding: 18px 22px;
+  border-radius: 16px;
   background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(237,233,224,0.9));
   border: 1px solid rgba(26, 26, 46, 0.06);
   box-shadow: var(--shadow);
@@ -31,17 +31,17 @@
 .req-title {
   margin: 0;
   font-family: "DM Serif Display", serif;
-  font-size: 40px;
-  line-height: 1;
+  font-size: 32px;
+  line-height: 1.05;
   color: var(--ink);
 }
 
 .req-subtitle {
   margin: 0;
   color: var(--ink-light);
-  font-size: 15px;
+  font-size: 14px;
   max-width: 760px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .req-hero-right {
@@ -117,10 +117,11 @@
 .req-search {
   width: 280px;
   max-width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
   border: 1px solid rgba(26, 26, 46, 0.1);
   background: white;
+  font-size: 13px;
 }
 
 .req-board {

@@ -34,32 +34,41 @@ Y setear:
 
 ```bash
 gcloud config set project att-web-2809
-gcloud config set run/region us-central1
+# Debe coincidir con `firebase.json` → hosting.rewrites `/api/**` → Cloud Run (region).
+gcloud config set run/region southamerica-east1
 ```
 
-2) Build imagen (Cloud Build) usando el Dockerfile del repo:
+2) Build imagen (Cloud Build) usando el Dockerfile del repo.
+
+La **región del servicio Cloud Run** debe ser **`southamerica-east1`** (igual que `firebase.json` → rewrite `/api/**`). La imagen puede vivir en Artifact Registry en **otra** región del mismo proyecto (p. ej. `us-central1`); lo importante es el `--region` del `gcloud run deploy`.
 
 ```bash
+TAG="$(date +%Y%m%d-%H%M)"
+# Ajustá AR_REGION a donde tengas el repo Docker `att` (Artifact Registry).
+AR_REGION="us-central1"
+
 gcloud builds submit \
-  --tag "us-central1-docker.pkg.dev/att-web-2809/att/att-dfe-api:$(date +%Y%m%d-%H%M)" \
+  --tag "${AR_REGION}-docker.pkg.dev/att-web-2809/att/att-dfe-api:${TAG}" \
   --file backend/dfe_api/Dockerfile \
   .
 ```
 
-Si es la primera vez, creá el repo de Artifact Registry (una vez):
+Si es la primera vez, creá el repo de Artifact Registry (una vez), en la región que elijas arriba:
 
 ```bash
 gcloud artifacts repositories create att \
   --repository-format=docker \
-  --location=us-central1
+  --location="${AR_REGION}"
 ```
 
-3) Deploy Cloud Run (desde la imagen):
+3) Deploy Cloud Run (desde la imagen; **siempre** `southamerica-east1` para coincidir con Firebase Hosting):
 
 ```bash
-IMAGE="us-central1-docker.pkg.dev/att-web-2809/att/att-dfe-api:REEMPLAZAR_TAG"
+# Mismo tag que usaste en el build; AR_REGION el mismo que en el paso 2.
+IMAGE="${AR_REGION}-docker.pkg.dev/att-web-2809/att/att-dfe-api:REEMPLAZAR_TAG"
 
 gcloud run deploy att-dfe-api \
+  --region southamerica-east1 \
   --image "$IMAGE" \
   --allow-unauthenticated \
   --set-env-vars ARCA_ENV=homologacion,ARCA_WSAA_SERVICE=veconsumerws,ARCA_CUIT_REPRESENTADA=20123456789,DFE_CORS_ORIGINS=https://att-web-2809.web.app,https://att-web-2809.firebaseapp.com,ARCA_CERT_PATH=/secrets/arca/cert.pem,ARCA_KEY_PATH=/secrets/arca/key.pem \

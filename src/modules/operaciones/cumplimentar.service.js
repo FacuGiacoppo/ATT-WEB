@@ -47,7 +47,6 @@ export async function saveCumplimiento(operacionId, data, nuevoEstado) {
     asunto:            data.asunto         ?? "",
     cuerpo:            data.cuerpo         ?? "",
     cumplidoPor:       data.cumplidoPor    ?? "",
-    tiempoInsumido:    data.tiempoInsumidoMin ?? 0,
     createdAt:         serverTimestamp()
   });
 

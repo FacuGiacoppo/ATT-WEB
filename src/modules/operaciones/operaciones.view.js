@@ -19,6 +19,7 @@ import {
   esNombreTareaPlanIn,
   coincideTipoProgramacion
 } from "../../data/operaciones-scheduling.js";
+import { renderMultiFilter, buildMultiFilterOpts } from "./operaciones-multi-filter.js";
 
 const ESTADOS = ["Pendiente", "Cumplido", "Cumplido Tardio", "Vencido"];
 const ORGANISMOS = ["ARCA", "AFIP", "Provincial", "Municipal", "Otro"];
@@ -149,28 +150,6 @@ function isTareaLabel(obligacion) {
   return esNombreTareaPlanIn(obligacion);
 }
 
-export function renderMultiFilter(id, label) {
-  return `
-    <details class="op-mfilter" data-filter-id="${id}">
-      <summary class="op-mfilter-btn">
-        <span class="op-mfilter-label">${escapeHtml(label)}</span>
-        <span class="op-mfilter-count is-hidden" id="${id}-count"></span>
-        <span class="op-mfilter-arrow">▾</span>
-      </summary>
-      <div class="op-mfilter-panel" id="${id}-panel" tabindex="-1">
-        <div class="op-mfilter-pop-head">
-          <input type="search" class="op-mfilter-search" placeholder="Buscar…" autocomplete="off" data-mfilter-search="${id}" />
-          <div class="op-mfilter-actions">
-            <button type="button" class="op-mfilter-action" data-mfilter-all="${id}">Marcar todos</button>
-            <button type="button" class="op-mfilter-action op-mfilter-action--secondary" data-mfilter-clear="${id}">Ninguno</button>
-          </div>
-        </div>
-        <div class="op-mfilter-opts" id="${id}-opts"></div>
-      </div>
-    </details>
-  `;
-}
-
 export function renderOperacionesView() {
   const user = appState.session.user;
 
@@ -238,6 +217,13 @@ export function renderOperacionesView() {
           <tbody id="op-tbody"></tbody>
         </table>
         <div id="op-empty" class="op-empty" hidden>Sin registros para los filtros actuales.</div>
+        <div class="att-pager op-table-pager" id="op-table-pager" hidden>
+          <span class="att-pager-meta" id="op-table-pager-meta"></span>
+          <div class="att-pager-actions">
+            <button type="button" class="btn-secondary att-pager-btn" id="op-page-prev">Anterior</button>
+            <button type="button" class="btn-secondary att-pager-btn" id="op-page-next">Siguiente</button>
+          </div>
+        </div>
       </div>
 
       ${renderOperacionModals()}
@@ -677,31 +663,6 @@ export function computeOperacionKpis(items) {
   }
 
   return { pendientes, prox7, vencidas, cerradas, total: items.length };
-}
-
-function encCheckboxValue(v) {
-  return encodeURIComponent(String(v));
-}
-
-export function buildMultiFilterOpts(id, values, selected, labelFn) {
-  const optsEl = document.getElementById(`${id}-opts`);
-  const countEl = document.getElementById(`${id}-count`);
-  if (!optsEl) return;
-  const selSet = new Set(selected.map((s) => String(s)));
-  optsEl.innerHTML = values.map((v) => {
-    const lbl = labelFn ? labelFn(v) : v;
-    const checked = selSet.has(String(v)) ? " checked" : "";
-    const enc = encCheckboxValue(v);
-    return `<label class="op-mfilter-opt">
-      <input type="checkbox" name="${id}" value="${enc}"${checked} />
-      <span>${escapeHtml(lbl)}</span>
-    </label>`;
-  }).join("");
-  if (countEl) {
-    const hasActive = selected.length > 0;
-    countEl.classList.toggle("is-hidden", !hasActive);
-    countEl.textContent = hasActive ? String(selected.length) : "";
-  }
 }
 
 function syncMultiFilterDetailsActive() {

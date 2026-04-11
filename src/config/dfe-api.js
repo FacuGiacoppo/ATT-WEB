@@ -1,15 +1,25 @@
 /**
  * Base URL de la API DFE (Flask en backend/dfe_api).
- * Definir en index.html antes de main.js si no usás el default:
- *   window.__ATT_DFE_API_BASE__ = "http://127.0.0.1:5050";
+ *
+ * Orden:
+ * 1) `window.__ATT_DFE_API_BASE__` si está definida (local o URL directa a Cloud Run).
+ * 2) En navegador http/https: `location.origin` (ej. https://att-web-2809.web.app) para que los fetch
+ *    sean explícitos; las rutas siguen siendo `${base}/api/dfe/...`.
+ *
+ * Firebase Hosting: `firebase.json` reescribe `/api/**` al servicio Cloud Run `att-dfe-api`
+ * (no hace falta hardcodear el *.run.app salvo que quieras saltar el proxy).
  */
 export function getDfeApiBase() {
   if (typeof window !== "undefined" && window.__ATT_DFE_API_BASE__) {
     return String(window.__ATT_DFE_API_BASE__).replace(/\/$/, "");
   }
-  // Producción recomendada: mismo origen (Firebase Hosting) con proxy /api/** → Cloud Run.
-  // Desarrollo local: si corrés la API en tu PC, definí window.__ATT_DFE_API_BASE__ en index.html
-  // o levantá el frontend en http para evitar mixed-content.
+  if (
+    typeof window !== "undefined" &&
+    typeof location !== "undefined" &&
+    (location.protocol === "http:" || location.protocol === "https:")
+  ) {
+    return location.origin.replace(/\/$/, "");
+  }
   return "";
 }
 

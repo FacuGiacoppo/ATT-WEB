@@ -21,10 +21,10 @@ export function canSeeModule(user, moduleName) {
   const role = getCurrentRole(user);
 
   const access = {
-    superadmin: ["dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
-    admin: ["dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
-    colaborador: ["dashboard", "requerimientos", "operaciones", "users", "dfe"],
-    lectura: ["dashboard", "users"],
+    superadmin: ["inicio", "dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
+    admin: ["inicio", "dashboard", "clientes", "operaciones", "requerimientos", "reporteria", "tiempos", "users", "dfe"],
+    colaborador: ["inicio", "dashboard", "clientes", "requerimientos", "operaciones", "users", "dfe"],
+    lectura: ["inicio", "dashboard", "users"],
   };
 
   return access[role]?.includes(moduleName) ?? false;
@@ -78,6 +78,11 @@ export function canDeleteOperacion(user) {
 }
 
 export function canManageUsers(user) {
+  return getCurrentRole(user) === "superadmin";
+}
+
+/** Activar DFE en la ficha solo tras delegación ARCA (solo superadmin). */
+export function canToggleClienteDfe(user) {
   return getCurrentRole(user) === "superadmin";
 }
 

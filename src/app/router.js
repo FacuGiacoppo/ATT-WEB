@@ -2,11 +2,9 @@ import { renderLoginView } from "../modules/auth/login.view.js";
 import { renderAppLayout } from "./layout.js";
 import { renderRequerimientosView } from "../modules/requerimientos/req.view.js";
 import { renderUsersView } from "../modules/users/users.view.js";
-import { renderClientesView } from "../modules/clientes/clientes.view.js";
 import { appState } from "./state.js";
 import { loadRequirements } from "../modules/requerimientos/req.controller.js";
 import { loadUsers } from "../modules/users/users.controller.js";
-import { loadClientes } from "../modules/clientes/clientes.controller.js";
 import {
   renderOperacionesView,
   paintOperacionesFilters
@@ -19,12 +17,7 @@ import {
 import { renderBandejaCumplimientosView } from "../modules/bandeja-cumplimientos/bandeja-cumplimientos.view.js";
 import { renderEstadoResultadosView } from "../modules/estado-resultados/estado-resultados.view.js";
 import { initEstadoResultadosPage } from "../modules/estado-resultados/estado-resultados.controller.js";
-import {
-  renderConsultasDfeView,
-  initConsultasDfePage,
-  stopDfeInboxAutoRefresh,
-} from "../modules/consultas-dfe/consultas-dfe.controller.js";
-import { refreshDfeGlobalIndicators } from "../modules/consultas-dfe/dfe-global-indicators.js";
+import { attVersionedModuleUrl } from "./att-module-url.js";
 import {
   canAccessCentralOperaciones,
   canAccessEstadoResultados,
@@ -39,12 +32,32 @@ import {
   initCentralOperacionesPage,
   paintCentralOperacionesTable
 } from "../modules/central-operaciones/central-operaciones.controller.js";
-import { renderInicioView } from "../modules/inicio/inicio.view.js";
 import { renderReporteTiemposView } from "../modules/reporte-tiempos/reporte-tiempos.view.js";
 import {
   loadReporteTiempos,
   initReporteTiemposPage
 } from "../modules/reporte-tiempos/reporte-tiempos.controller.js";
+
+/** import() cache del controller DFE (misma URL ?v=build → misma instancia). */
+let dfeControllerModulePromise = null;
+
+async function stopDfeInboxAutoRefreshSafe() {
+  if (!dfeControllerModulePromise) return;
+  try {
+    const mod = await dfeControllerModulePromise;
+    mod.stopDfeInboxAutoRefresh();
+  } catch (_) {
+    /* noop */
+  }
+}
+
+async function importConsultasDfeController() {
+  const href = attVersionedModuleUrl("../modules/consultas-dfe/consultas-dfe.controller.js", import.meta.url);
+  if (!dfeControllerModulePromise) {
+    dfeControllerModulePromise = import(href);
+  }
+  return dfeControllerModulePromise;
+}
 
 export async function navigate(route) {
   appState.ui.activeRoute = route;
@@ -72,7 +85,7 @@ export async function renderRoute() {
   }
 
   try {
-    stopDfeInboxAutoRefresh();
+    await stopDfeInboxAutoRefreshSafe();
     app.innerHTML = renderAppLayout();
 
     const content = document.getElementById("main-content");
@@ -89,18 +102,34 @@ export async function renderRoute() {
           </section>`;
         break;
       }
-      content.innerHTML = renderInicioView();
+      {
+        const inicioMod = await import(
+          attVersionedModuleUrl("../modules/inicio/inicio.view.js", import.meta.url)
+        );
+        content.innerHTML = inicioMod.renderInicioView();
+      }
       break;
 
     case "clientes":
-      await loadClientes();
-      content.innerHTML = renderClientesView();
+      // Import versionado para evitar caché vieja (Safari puede retener módulos en memoria).
+      {
+        const [viewMod, ctrlMod] = await Promise.all([
+          import(attVersionedModuleUrl("../modules/clientes/clientes.view.js", import.meta.url)),
+          import(attVersionedModuleUrl("../modules/clientes/clientes.controller.js", import.meta.url)),
+        ]);
+        await ctrlMod.loadClientes();
+        content.innerHTML = viewMod.renderClientesView();
+      }
       break;
 
     case "requerimientos":
       await Promise.all([
         loadRequirements(),
-        appState.clientes.items.length === 0 ? loadClientes() : Promise.resolve()
+        appState.clientes.items.length === 0
+          ? import(attVersionedModuleUrl("../modules/clientes/clientes.controller.js", import.meta.url)).then((m) =>
+              m.loadClientes()
+            )
+          : Promise.resolve()
       ]);
       content.innerHTML = renderRequerimientosView();
       break;
@@ -108,11 +137,37 @@ export async function renderRoute() {
     case "operaciones":
       await Promise.all([
         loadOperaciones(),
-        appState.clientes.items.length === 0 ? loadClientes() : Promise.resolve()
+        appState.clientes.items.length === 0
+          ? import(attVersionedModuleUrl("../modules/clientes/clientes.controller.js", import.meta.url)).then((m) =>
+              m.loadClientes()
+            )
+          : Promise.resolve()
       ]);
       content.innerHTML = renderOperacionesView();
       paintOperacionesFilters(appState.operaciones.items ?? []);
       paintOperacionesTable();
+      break;
+
+    case "obligaciones-plan":
+      if (!canSeeModule(appState.session.user, "operaciones")) {
+        content.innerHTML = `
+          <section class="page-section">
+            <div class="page-empty">No tenés permiso para acceder a Obligaciones plan-in.</div>
+          </section>`;
+        break;
+      }
+      {
+        if (appState.clientes.items.length === 0) {
+          const clientesMod = await import(attVersionedModuleUrl("../modules/clientes/clientes.controller.js", import.meta.url));
+          await clientesMod.loadClientes();
+        }
+        const [viewMod, ctrlMod] = await Promise.all([
+          import(attVersionedModuleUrl("../modules/obligaciones-plan/obligaciones-plan.view.js", import.meta.url)),
+          import(attVersionedModuleUrl("../modules/obligaciones-plan/obligaciones-plan.controller.js", import.meta.url)),
+        ]);
+        content.innerHTML = viewMod.renderObligacionesPlanView(appState.clientes.items ?? []);
+        ctrlMod.initObligacionesPlanPage();
+      }
       break;
 
     case "bandeja-cumplimientos":
@@ -180,8 +235,11 @@ export async function renderRoute() {
           </section>`;
         break;
       }
-      content.innerHTML = renderConsultasDfeView();
-      await initConsultasDfePage();
+      {
+        const dfeMod = await importConsultasDfeController();
+        content.innerHTML = dfeMod.renderConsultasDfeView();
+        await dfeMod.initConsultasDfePage();
+      }
       break;
 
     default:
@@ -195,7 +253,16 @@ export async function renderRoute() {
     }
 
     if (canSeeModule(appState.session.user, "dfe")) {
-      refreshDfeGlobalIndicators().catch(() => {});
+      try {
+        const gHref = attVersionedModuleUrl(
+          "../modules/consultas-dfe/dfe-global-indicators.js",
+          import.meta.url
+        );
+        const m = await import(gHref);
+        await m.refreshDfeGlobalIndicators();
+      } catch (e) {
+        console.warn("[DFE] refreshDfeGlobalIndicators:", e);
+      }
     }
   } catch (err) {
     console.error("renderRoute (sesión iniciada):", err);

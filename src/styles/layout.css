@@ -2,12 +2,18 @@
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
+  position: relative;
   background: var(--ink);
   color: white;
-  padding: 24px 16px;
+  padding: 24px 16px 52px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .sidebar-brand {
@@ -83,7 +89,9 @@
 
 .app-main {
   display: grid;
-  grid-template-rows: 72px 1fr;
+  grid-template-rows: 64px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .topbar {
@@ -92,7 +100,8 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  padding: 0 24px;
+  gap: 12px;
+  padding: 0 20px;
 }
 
 .topbar-search {
@@ -124,6 +133,56 @@
 
 .app-content {
   padding: 24px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Build al pie del sidebar — sin flex en el aside (evita saltos de layout entre secciones). */
+.sidebar-version {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: ui-monospace, Menlo, monospace;
+  line-height: 1.35;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Paginación reutilizable (Obligaciones, DFE, …) */
+.att-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(26, 26, 46, 0.08);
+  background: rgba(26, 26, 46, 0.02);
+  font-size: 13px;
+  color: var(--ink-light);
+}
+
+.att-pager-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+.att-pager-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.att-pager-btn.btn-secondary {
+  padding: 8px 14px;
+  font-size: 13px;
 }
 
 .page-section {
@@ -245,10 +304,10 @@
 }
 
 .users-toolbar {
-  margin-top: 20px;
+  margin-top: 14px;
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -261,7 +320,7 @@
 }
 
 .users-list-wrap {
-  margin-top: 20px;
+  margin-top: 14px;
 }
 
 .users-table-wrap {
@@ -279,7 +338,7 @@
 
 .users-table th,
 .users-table td {
-  padding: 16px 18px;
+  padding: 9px 12px;
   border-bottom: 1px solid rgba(26, 26, 46, 0.08);
   text-align: left;
   vertical-align: middle;
@@ -296,23 +355,25 @@
 
 .users-name-cell strong {
   color: var(--ink);
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .users-role-select {
-  min-width: 160px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  min-width: 140px;
+  padding: 6px 10px;
+  border-radius: 8px;
   border: 1px solid rgba(26, 26, 46, 0.12);
   background: white;
+  font-size: 13px;
 }
 
 .users-role-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 6px 12px;
+  min-height: 26px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: rgba(26, 26, 46, 0.06);
   color: var(--ink);
@@ -325,10 +386,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 28px;
-  padding: 5px 10px;
+  min-height: 24px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -345,18 +406,22 @@
 .users-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
+}
+
+.users-actions .btn-secondary {
+  white-space: nowrap;
 }
 
 .users-mode-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 6px 12px;
+  min-height: 28px;
+  padding: 5px 11px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
 }
 

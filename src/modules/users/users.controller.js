@@ -65,12 +65,13 @@ function renderUserRow(user, canManage) {
           canManage
             ? `
               <div class="users-actions">
-                <button class="btn-secondary" data-user-save-role="${user.id}">
+                <button type="button" class="btn-secondary btn-sm" data-user-save-role="${user.id}">
                   Guardar rol
                 </button>
 
                 <button
-                  class="btn-secondary"
+                  type="button"
+                  class="btn-secondary btn-sm"
                   data-user-toggle-active="${user.id}"
                   data-user-next-active="${user.active ? "false" : "true"}"
                 >

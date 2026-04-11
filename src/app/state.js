@@ -9,6 +9,13 @@ export const appState = {
     modalPayload: null,
     loading: false
   },
+  reporteTiempos: {
+    items: [],
+    loadError: null,
+    filters: {},
+    rowDims: [],
+    colDims: []
+  },
   requerimientos: {
     items: [],
     stageFilter: "todos",
@@ -43,24 +50,17 @@ export const appState = {
     sortDir: "asc",
     cumplimentarContactos: [],
     vistaMode: "todos",
-    vistaRefDate: null
+    vistaRefDate: null,
+    /** Paginación del listado principal (Obligaciones). */
+    listPage: 1
   },
-  /** Filtros de la Central de operaciones (solo superadmin). Misma lógica que Obligaciones. */
+  /** Filtros de la Central de operaciones (solo superadmin). */
   centralOperaciones: {
-    search: "",
-    clienteFilter: [],
-    obligacionFilter: [],
-    mesVtoFilter: [],
-    estadoFilter: [],
-    usuarioFilter: []
-  },
-  /** Reporte de tiempos insumidos (superadmin / admin / colaborador solo los propios). */
-  reporteTiempos: {
-    items: [],
-    loadError: null,
-    rowDims: [],
-    colDims: [],
-    filters: {}
+    filterClienteId: "",
+    filterTipo: "todos",
+    filterText: "",
+    filterVencMonth: "",
+    filterObligacionContains: ""
   },
   /** Registro de cumplimientos / bandeja de salida (misma visibilidad que operaciones). */
   bandejaCumplimientos: {

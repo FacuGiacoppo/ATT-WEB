@@ -18,18 +18,23 @@ if (typeof window !== "undefined") {
   };
 }
 
-async function waitForAuthReady({ timeoutMs = 8000 } = {}) {
+async function waitForAuthReady({ timeoutMs = 12000 } = {}) {
   if (auth.currentUser) return auth.currentUser;
   dfeAuthLog("auth.currentUser is null; waiting for onAuthStateChanged…");
   return await new Promise((resolve, reject) => {
     let done = false;
+    let unsub = () => {};
     const t = setTimeout(() => {
       if (done) return;
       done = true;
+      try {
+        unsub();
+      } catch {}
       reject(new Error("AUTH_NOT_READY_TIMEOUT"));
     }, timeoutMs);
-    const unsub = onAuthStateChanged(auth, (u) => {
+    unsub = onAuthStateChanged(auth, (u) => {
       if (done) return;
+      if (!u) return; // primer evento suele ser null hasta restaurar sesión; no resolver todavía
       done = true;
       clearTimeout(t);
       try {
@@ -40,15 +45,24 @@ async function waitForAuthReady({ timeoutMs = 8000 } = {}) {
   });
 }
 
-async function authHeaders() {
-  const u = auth.currentUser || (await waitForAuthReady().catch(() => null));
+/**
+ * Token en el momento del fetch: sin flags previos ni “auth lista”.
+ * @returns {Promise<{ Authorization: string }>}
+ */
+export async function getFirebaseBearerTokenOrThrow() {
+  const u = auth.currentUser;
   if (!u) {
-    dfeAuthLog("no firebase user; cannot attach token");
-    return { __dfeAuthMissing: "1" };
+    console.log("[DFE FINAL] DFE_AUTH_NOT_READY (no auth.currentUser)");
+    throw new Error("DFE_AUTH_NOT_READY");
   }
-  const token = await u.getIdToken();
-  dfeAuthLog("token ready", { uid: u.uid, email: u.email, tokenLen: String(token || "").length });
-  return { Authorization: `Bearer ${token}` };
+  try {
+    const token = await u.getIdToken();
+    dfeAuthLog("token ready", { uid: u.uid, email: u.email, tokenLen: String(token || "").length });
+    return { Authorization: `Bearer ${token}` };
+  } catch (err) {
+    console.log("[DFE FINAL] getFirebaseBearerTokenOrThrow getIdToken failed", err);
+    throw err;
+  }
 }
 
 async function parseJson(res) {
@@ -60,12 +74,7 @@ async function parseJson(res) {
 }
 
 async function authedFetch(url, init = {}) {
-  const h = await authHeaders();
-  if (h.__dfeAuthMissing) {
-    const e = new Error("DFE_AUTH_NOT_READY");
-    e.code = "DFE_AUTH_NOT_READY";
-    throw e;
-  }
+  const h = await getFirebaseBearerTokenOrThrow();
   const headers = { ...(init.headers || {}), ...h };
   dfeAuthLog("fetch", { url, method: init.method || "GET" });
   const res = await fetch(url, { ...init, headers });
@@ -151,10 +160,12 @@ export async function apiPostSyncClient(payload) {
  * @param {{ cuit?: string, soloNuevas?: boolean, limit?: number }} filters
  */
 export async function fetchComunicaciones(filters = {}) {
+  console.log("[DFE FINAL] fetching comunicaciones");
   const base = getDfeApiBase();
   const q = new URLSearchParams();
   if (filters.cuit) q.set("cuit", String(filters.cuit).replace(/\D/g, ""));
   if (filters.soloNuevas) q.set("soloNuevas", "true");
+  if (filters.bandejaCompleta) q.set("bandejaCompleta", "true");
   if (filters.soloUrgentes) q.set("soloUrgentes", "true");
   if (filters.fechaDesde) q.set("fechaDesde", String(filters.fechaDesde));
   if (filters.fechaHasta) q.set("fechaHasta", String(filters.fechaHasta));
@@ -162,7 +173,10 @@ export async function fetchComunicaciones(filters = {}) {
   const qs = q.toString();
   const res = await authedFetch(`${base}/api/dfe/comunicaciones${qs ? `?${qs}` : ""}`);
   const body = await parseJson(res);
-  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+  const out = { ok: res.ok && body.ok !== false, status: res.status, ...body };
+  if (out.ok) console.log("[DFE FINAL] fetch comunicaciones ok", { status: res.status });
+  else console.log("[DFE FINAL] fetch comunicaciones error", { status: res.status, message: out.message, error: out.error });
+  return out;
 }
 
 /**
@@ -182,10 +196,14 @@ export async function fetchComunicacionesNuevas(filters = {}) {
 }
 
 export async function fetchResumen() {
+  console.log("[DFE FINAL] fetching resumen");
   const base = getDfeApiBase();
   const res = await authedFetch(`${base}/api/dfe/resumen`);
   const body = await parseJson(res);
-  return { ok: res.ok && body.ok !== false, status: res.status, ...body };
+  const out = { ok: res.ok && body.ok !== false, status: res.status, ...body };
+  if (out.ok) console.log("[DFE FINAL] fetch resumen ok", { status: res.status });
+  else console.log("[DFE FINAL] fetch resumen error", { status: res.status, message: out.message, error: out.error });
+  return out;
 }
 
 /** Una sola petición GET /resumen si varios consumidores la piden a la vez (sidebar + panel DFE). */

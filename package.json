@@ -3,6 +3,11 @@
   "private": true,
   "scripts": {
     "start": "npx --yes serve@14 . -l 3000 -s",
-    "dev": "npx --yes serve@14 . -l 3000 -s"
+    "dev": "npx --yes serve@14 . -l 3000 -s",
+    "export:oplan": "node scripts/export-obligaciones-plan-master.mjs",
+    "import:maestro": "node scripts/import-xlsx-maestro.mjs"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
   }
 }

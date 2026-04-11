@@ -248,6 +248,7 @@ def list_comunicaciones_firestore(
     fecha_hasta: str | None,
     limit: int,
     require_es_nueva: bool = False,
+    incluir_archivadas_en_listado: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Lista desde Firestore. Orden: effective sort ms descendente.
@@ -287,7 +288,7 @@ def list_comunicaciones_firestore(
         data = snap.to_dict() or {}
         row = normalize_comunicacion_for_api(snap.id, data)
 
-        if not solo_archivadas and is_archivada_interna(data):
+        if not solo_archivadas and not incluir_archivadas_en_listado and is_archivada_interna(data):
             continue
 
         if (solo_nuevas or require_es_nueva) and is_leida_interna(data):

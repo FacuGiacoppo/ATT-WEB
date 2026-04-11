@@ -4,7 +4,7 @@
 
 .clientes-page {
   display: grid;
-  gap: 24px;
+  gap: 18px;
 }
 
 /* ── Hero ─────────────────────────────────────────── */
@@ -13,7 +13,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -39,14 +39,14 @@
 .clientes-import-banner {
   position: relative;
   background: white;
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   border: 1px solid rgba(26, 26, 46, 0.06);
   border-left: 4px solid var(--accent);
-  padding: 18px 24px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -57,15 +57,15 @@
 
 .clientes-import-banner-title {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--ink);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .clientes-import-banner-desc {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink-muted);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .clientes-import-banner-right {
@@ -113,6 +113,21 @@
   grid-template-columns: 288px 1fr;
   gap: 20px;
   align-items: start;
+}
+
+@media (max-width: 960px) {
+  .clientes-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .clientes-list {
+    max-height: min(42vh, 320px);
+  }
+
+  /* En celular la ficha va debajo: sin tope para que el check DFE (arriba del form) sea visible al desplazar. */
+  .clientes-form-panel {
+    max-height: none;
+  }
 }
 
 /* Right column stacks form + insights vertically */
@@ -174,7 +189,7 @@
   background: transparent;
   border: none;
   border-left: 3px solid transparent;
-  padding: 12px 16px;
+  padding: 9px 14px;
   cursor: pointer;
   border-bottom: 1px solid rgba(26, 26, 46, 0.06);
   display: block;
@@ -191,21 +206,45 @@
 }
 
 .cliente-item-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   font-weight: 600;
   font-size: 14px;
   color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.cliente-item-name-text {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.cliente-dfe-pill {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(59, 91, 140, 0.12);
+  color: #2c5282;
 }
 
 .cliente-item-meta {
   font-size: 11px;
   color: var(--ink-muted);
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin-top: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 /* ── Form panel ───────────────────────────────────── */
@@ -577,4 +616,56 @@
   font-size: 13px;
   color: var(--ink-muted);
   font-style: italic;
+}
+
+/* DFE toggle (ficha cliente) */
+.cliente-dfe-field--first {
+  scroll-margin-top: 12px;
+}
+
+@media (min-width: 961px) {
+  .clientes-form-panel .cliente-dfe-field--first {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #fff;
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+    box-shadow: 0 10px 14px -12px rgba(26, 26, 46, 0.35);
+  }
+}
+
+.cliente-dfe-field .cf-label {
+  margin-bottom: 6px;
+}
+
+.cliente-dfe-panel {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 91, 140, 0.22);
+  background: rgba(59, 91, 140, 0.06);
+}
+
+.cliente-dfe-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cliente-dfe-toggle input[type="checkbox"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.cliente-dfe-toggle--disabled {
+  opacity: 0.65;
+  pointer-events: none;
 }

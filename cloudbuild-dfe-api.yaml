@@ -1,0 +1,12 @@
+# Build imagen att-dfe-api (contexto = raíz del repo; Dockerfile en backend/dfe_api).
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "backend/dfe_api/Dockerfile"
+      - "-t"
+      - "$_IMAGE"
+      - "."
+images:
+  - "$_IMAGE"

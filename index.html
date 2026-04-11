@@ -11,6 +11,8 @@
           if (parts.length && /\.html?$/i.test(parts[parts.length - 1])) parts.pop();
           var href = parts.length ? "/" + parts.join("/") + "/" : "/";
           window.__ATT_SITE_BASE__ = location.origin + href;
+          // Una sola versión para cache-bust: main.js, bootstrap.js (vía main.js), y referencia manual.
+          window.__ATT_APP_BUILD__ = "20260411-27";
           // DEV local: el server estático no hace proxy /api/**.
           // Si abrís en localhost, apuntar la API DFE al backend local.
           if (
@@ -20,6 +22,9 @@
           ) {
             window.__ATT_DFE_API_BASE__ = "http://127.0.0.1:5050";
           }
+          // En Firebase (att-web-2809.web.app): no setear __ATT_DFE_API_BASE__ → getDfeApiBase() usa
+          // location.origin y las rutas /api/dfe/* pasan por rewrites en firebase.json hacia Cloud Run.
+          // Para llamar directo al servicio: window.__ATT_DFE_API_BASE__ = "https://<service>-<hash>-southamerica-east1.run.app";
           var b = document.createElement("base");
           b.href = href;
           var ch = document.querySelector("meta[charset]");
@@ -42,13 +47,14 @@
       rel="stylesheet"
     />
 
-    <link rel="stylesheet" href="./src/styles/base.css?v=20260408-11" />
-    <link rel="stylesheet" href="./src/styles/layout.css?v=20260409-24" />
-    <link rel="stylesheet" href="./src/styles/requerimientos.css?v=20260408-11" />
-    <link rel="stylesheet" href="./src/styles/clientes.css?v=20260408-11" />
-    <link rel="stylesheet" href="./src/styles/operaciones.css?v=20260408-11" />
+    <link rel="stylesheet" href="./src/styles/base.css?v=20260411-27" />
+    <link rel="stylesheet" href="./src/styles/layout.css?v=20260411-27" />
+    <link rel="stylesheet" href="./src/styles/requerimientos.css?v=20260411-27" />
+    <link rel="stylesheet" href="./src/styles/clientes.css?v=20260411-27" />
+    <link rel="stylesheet" href="./src/styles/operaciones.css?v=20260411-27" />
+    <link rel="stylesheet" href="./src/styles/obligaciones-plan.css?v=20260411-27" />
     <link rel="stylesheet" href="./src/styles/estado-resultados.css?v=20260408-11" />
-    <link rel="stylesheet" href="./src/styles/consultas-dfe.css?v=20260409-30" />
+    <link rel="stylesheet" href="./src/styles/consultas-dfe.css?v=20260411-27" />
     <link rel="stylesheet" href="./src/styles/reporte-tiempos.css?v=20260408-11" />
   </head>
   <body>
@@ -64,7 +70,7 @@
     <!-- URL absoluta: en Pages ./src/main.js a veces devolvía HTML (Unexpected token '<'). -->
     <script>
       (function () {
-        var v = "20260409-30";
+        var v = window.__ATT_APP_BUILD__ || "20260411-27";
         var base = window.__ATT_SITE_BASE__;
         var src = base
           ? new URL("src/main.js?v=" + v, base).href

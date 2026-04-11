@@ -2,7 +2,7 @@ import { appState } from "../../app/state.js";
 import {
   canCreateCliente,
   canEditCliente,
-  canImportClientes
+  canImportClientes,
 } from "../../utils/permissions.js";
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
@@ -149,6 +149,14 @@ function escapeHtml(v) {
     .replaceAll("'", "&#039;");
 }
 
+/** Misma lógica que `normalizeDfeEnabled` en `clientes.service.js` (no importar el .service acá: Safari cachea ese módulo sin ?v= y rompe los bindings). */
+function clienteDfeActivado(c) {
+  const v = c?.dfeEnabled;
+  if (v === true || v === 1 || v === "1") return true;
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "true" || s === "s" || s === "si" || s === "sí" || s === "yes";
+}
+
 // Parsea el campo "etiquetas" al formato [{ tipo, valor }]
 // Maneja entradas compuestas como "Rubro: Comercial – Empleador: de 11 a 50 empleados"
 // separándolas en dos tags distintos (igual que HTML ESTUDIO ATT)
@@ -248,7 +256,7 @@ export function renderClientesView() {
           <p class="req-subtitle">Gestión de fichas, accesos y datos fiscales del estudio.</p>
         </div>
         <div class="clientes-hero-right">
-          ${canCreate ? `<button id="btn-new-cliente" class="btn-primary">Nuevo cliente</button>` : ""}
+          ${canCreate ? `<button type="button" id="btn-new-cliente" class="btn-primary btn-sm">Nuevo cliente</button>` : ""}
         </div>
       </div>
 
@@ -303,7 +311,7 @@ function renderImportBanner() {
         </div>
       </div>
       <div class="clientes-import-banner-right">
-        <label class="btn-primary clientes-import-label" id="lbl-import-clientes">
+        <label class="btn-primary btn-sm clientes-import-label" id="lbl-import-clientes">
           📥 Seleccionar archivo Excel
           <input type="file" id="clientes-import-input" accept=".xlsx,.xls,.csv" style="display:none">
         </label>
@@ -337,7 +345,10 @@ export function renderClientesListHtml() {
   const selectedId = appState.clientes?.selectedId;
   return items.map(c => `
     <button class="cliente-item ${selectedId === c.id ? "active" : ""}" data-client-select-id="${c.id}">
-      <div class="cliente-item-name">${escapeHtml(c.nombre || "Sin nombre")}</div>
+      <div class="cliente-item-name">
+        <span class="cliente-item-name-text">${escapeHtml(String(c.nombre || "Sin nombre").trim().toLocaleUpperCase("es-AR"))}</span>
+        ${clienteDfeActivado(c) ? '<span class="cliente-dfe-pill" title="DFE habilitado en ARCA / sync activo">DFE</span>' : ""}
+      </div>
       <div class="cliente-item-meta">
         ID: ${escapeHtml(c.id_cliente || "—")} · ${escapeHtml(c.tipo_societario || "—")} · ${escapeHtml(c.cuit || "Sin CUIT")}
       </div>
@@ -397,11 +408,27 @@ function renderClienteFormHtml(c, canEdit) {
   const v    = f => escapeHtml(c ? (c[f] ?? "") : "");
   const isNew = !c;
   const title = isNew ? "Nuevo cliente" : escapeHtml(c.nombre || "Ficha del cliente");
+  const user = appState.session.user;
+  const canToggleDfe = (user?.role === "superadmin");
+  const dfeInputDisabled = !canToggleDfe;
 
   return `
     <div class="clientes-form-inner">
       <div class="clientes-form-title">${title}</div>
       <div class="cf-grid">
+        <div class="cf-field cf-field--full cliente-dfe-field cliente-dfe-field--first">
+          <span class="cf-label">Bandeja DFE (ARCA)</span>
+          <div class="cliente-dfe-panel">
+            <label class="cliente-dfe-toggle ${dfeInputDisabled ? "cliente-dfe-toggle--disabled" : ""}">
+              <input type="checkbox" id="cf-dfe-enabled" ${clienteDfeActivado(c) ? "checked" : ""} ${dfeInputDisabled ? "disabled" : ""}>
+              <span>${
+                canToggleDfe
+                  ? "Marcá esto solo cuando la delegación en ARCA esté hecha. Incluye al cliente en la sincronización DFE (usa el CUIT más abajo)."
+                  : "Solo un superadmin puede activar o desactivar DFE tras la delegación en ARCA. Si falta, avisale al responsable."
+              }</span>
+            </label>
+          </div>
+        </div>
         <label class="cf-field"><span>ID Cliente</span>
           <input type="text" id="cf-id_cliente" value="${v("id_cliente")}" placeholder="Ej: 1234">
         </label>

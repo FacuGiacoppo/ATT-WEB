@@ -64,6 +64,26 @@ function updateFilterBadge(filterId, selected) {
 
 let opEventsBound = false;
 
+const OP_TABLE_PAGE_SIZE = 50;
+let _lastOperacionesTableFilterSig = null;
+
+function operacionesTableFilterSignature() {
+  const o = appState.operaciones;
+  const j = (a) => (Array.isArray(a) ? a.join("\u001e") : "");
+  return [
+    o.search ?? "",
+    j(o.estadoFilter),
+    j(o.clienteFilter),
+    j(o.obligacionFilter),
+    j(o.mesVtoFilter),
+    j(o.usuarioFilter),
+    o.sortKey ?? "",
+    o.sortDir ?? "",
+    o.vistaMode ?? "",
+    o.vistaRefDate ?? "",
+  ].join("|");
+}
+
 function normalizeUserKey(v) {
   return String(v ?? "")
     .trim()
@@ -215,6 +235,10 @@ export function paintOperacionesTable() {
   const kpis = document.getElementById("op-kpis");
   const empty = document.getElementById("op-empty");
   const alertEl = document.getElementById("op-load-error");
+  const pager = document.getElementById("op-table-pager");
+  const pagerMeta = document.getElementById("op-table-pager-meta");
+  const pagePrev = document.getElementById("op-page-prev");
+  const pageNext = document.getElementById("op-page-next");
   if (!tbody || !kpis) return;
 
   if (alertEl) {
@@ -230,6 +254,12 @@ export function paintOperacionesTable() {
 
   const user = appState.session.user;
   const all = appState.operaciones.items ?? [];
+  const sig = operacionesTableFilterSignature();
+  if (_lastOperacionesTableFilterSig !== null && sig !== _lastOperacionesTableFilterSig) {
+    setState("operaciones.listPage", 1);
+  }
+  _lastOperacionesTableFilterSig = sig;
+
   const filtered = filterAndSortOperaciones(all, appState.operaciones);
   const k = computeOperacionKpis(all);
 
@@ -241,13 +271,35 @@ export function paintOperacionesTable() {
     <div class="op-kpi op-kpi--ok"><span class="op-kpi-n">${k.cerradas}</span><span class="op-kpi-l">Cerradas</span></div>
   `;
 
-  if (!filtered.length) {
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / OP_TABLE_PAGE_SIZE));
+  let page = appState.operaciones.listPage || 1;
+  if (page > totalPages) page = totalPages;
+  if (page < 1) page = 1;
+  if (page !== (appState.operaciones.listPage || 1)) {
+    setState("operaciones.listPage", page);
+  }
+
+  if (!total) {
     tbody.innerHTML = "";
     if (empty) empty.hidden = false;
+    if (pager) pager.hidden = true;
     return;
   }
   if (empty) empty.hidden = true;
-  tbody.innerHTML = filtered.map((row) => renderOperacionRow(row, user)).join("");
+
+  const start = (page - 1) * OP_TABLE_PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + OP_TABLE_PAGE_SIZE);
+  tbody.innerHTML = pageRows.map((row) => renderOperacionRow(row, user)).join("");
+
+  if (pager && pagerMeta && pagePrev && pageNext) {
+    pager.hidden = false;
+    const from = start + 1;
+    const to = start + pageRows.length;
+    pagerMeta.textContent = `Página ${page} de ${totalPages} · ${from}–${to} de ${total}`;
+    pagePrev.disabled = page <= 1;
+    pageNext.disabled = page >= totalPages;
+  }
 
   syncSortHeaders();
 }
@@ -473,15 +525,32 @@ export function bindOperacionesEvents() {
       return;
     }
 
-    const mfilterAll = event.target.closest("[data-mfilter-all]");
-    if (mfilterAll && mfilterAll.closest("#op-filters-row")) {
+    const mfilterClear = event.target.closest("[data-mfilter-clear]");
+    if (mfilterClear) {
       event.preventDefault();
-      const filterId = mfilterAll.dataset.mfilterAll;
+      const filterId = mfilterClear.dataset.mfilterClear;
+      const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
+      if (stateKey) {
+        setState(`operaciones.${stateKey}`, []);
+        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
+          c.checked = false;
+        });
+        updateFilterBadge(filterId, []);
+        paintOperacionesTable();
+        return;
+      }
+    }
+
+    const mfilterVisible = event.target.closest("[data-mfilter-visible]");
+    if (mfilterVisible) {
+      event.preventDefault();
+      const filterId = mfilterVisible.dataset.mfilterVisible;
       const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
       const optsEl = document.getElementById(`${filterId}-opts`);
       if (stateKey && optsEl) {
         const selected = [];
         optsEl.querySelectorAll(".op-mfilter-opt").forEach((row) => {
+          if (row.classList.contains("op-mfilter-opt--hidden")) return;
           const inp = row.querySelector("input[type='checkbox']");
           if (inp) {
             inp.checked = true;
@@ -494,22 +563,6 @@ export function bindOperacionesEvents() {
         });
         setState(`operaciones.${stateKey}`, selected);
         updateFilterBadge(filterId, selected);
-        paintOperacionesTable();
-        return;
-      }
-    }
-
-    const mfilterClear = event.target.closest("[data-mfilter-clear]");
-    if (mfilterClear && mfilterClear.closest("#op-filters-row")) {
-      event.preventDefault();
-      const filterId = mfilterClear.dataset.mfilterClear;
-      const stateKey = FILTER_ID_TO_STATE_KEY[filterId];
-      if (stateKey) {
-        setState(`operaciones.${stateKey}`, []);
-        document.querySelectorAll(`input[name="${filterId}"]`).forEach((c) => {
-          c.checked = false;
-        });
-        updateFilterBadge(filterId, []);
         paintOperacionesTable();
         return;
       }
@@ -562,6 +615,20 @@ export function bindOperacionesEvents() {
         setState("operaciones.sortKey", key);
         setState("operaciones.sortDir", "asc");
       }
+      paintOperacionesTable();
+      return;
+    }
+
+    if (event.target.closest("#op-page-prev") && document.getElementById("op-tbody")) {
+      const p = (appState.operaciones.listPage || 1) - 1;
+      if (p >= 1) {
+        setState("operaciones.listPage", p);
+        paintOperacionesTable();
+      }
+      return;
+    }
+    if (event.target.closest("#op-page-next") && document.getElementById("op-tbody")) {
+      setState("operaciones.listPage", (appState.operaciones.listPage || 1) + 1);
       paintOperacionesTable();
       return;
     }

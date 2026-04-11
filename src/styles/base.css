@@ -40,11 +40,12 @@ textarea {
   background: var(--accent);
   color: white;
   border: none;
-  border-radius: 12px;
-  padding: 12px 18px;
+  border-radius: 10px;
+  padding: 8px 14px;
   cursor: pointer;
   transition: 0.2s ease;
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .btn-primary:hover {
@@ -55,21 +56,31 @@ textarea {
   background: white;
   color: var(--ink);
   border: 1px solid rgba(26, 26, 46, 0.14);
-  border-radius: 12px;
-  padding: 12px 18px;
+  border-radius: 10px;
+  padding: 8px 14px;
   cursor: pointer;
   font-weight: 600;
+  font-size: 13px;
 }
 
 .btn-danger {
   background: var(--danger);
   color: white;
   border: none;
-  border-radius: 12px;
-  padding: 12px 18px;
+  border-radius: 10px;
+  padding: 8px 14px;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 13px;
   transition: 0.2s ease;
+}
+
+/* Botones compactos (tablas, toolbars) */
+.btn-sm {
+  padding: 6px 11px;
+  font-size: 12px;
+  border-radius: 8px;
+  font-weight: 600;
 }
 
 .btn-danger:hover {

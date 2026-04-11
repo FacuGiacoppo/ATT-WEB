@@ -164,7 +164,7 @@
 
 .op-table th {
   text-align: left;
-  padding: 14px 16px;
+  padding: 10px 12px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -211,7 +211,7 @@
 }
 
 .op-table td {
-  padding: 7px 12px;
+  padding: 6px 11px;
   border-bottom: 1px solid rgba(26, 26, 46, 0.06);
   vertical-align: middle;
   font-size: 13px;
@@ -347,12 +347,6 @@
   text-align: right;
   white-space: nowrap;
   vertical-align: middle;
-}
-
-.btn-sm {
-  padding: 8px 12px;
-  font-size: 13px;
-  border-radius: 10px;
 }
 
 .op-btn-del {

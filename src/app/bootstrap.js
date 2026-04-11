@@ -1,21 +1,27 @@
-import { renderRoute, navigate } from "./router.js";
+/**
+ * Router se carga con ?v=__ATT_APP_BUILD__ para no quedar en caché viejo mientras main/bootstrap sí bustean.
+ * El resto de imports siguen siendo estáticos relativos al mismo origen que antes.
+ */
+import { attVersionedModuleUrl } from "./att-module-url.js";
 import { bindAuthEvents } from "../modules/auth/auth.controller.js";
 import { bindReqEvents } from "../modules/requerimientos/req.controller.js";
 import { bindUsersEvents } from "../modules/users/users.controller.js";
-import { bindClientesEvents } from "../modules/clientes/clientes.controller.js";
 import { bindOperacionesEvents } from "../modules/operaciones/operaciones.controller.js";
 import { bindCentralOperacionesEvents } from "../modules/central-operaciones/central-operaciones.controller.js";
 import { bindBandejaCumplimientosEvents } from "../modules/bandeja-cumplimientos/bandeja-cumplimientos.controller.js";
 import { appState, resetSession } from "./state.js";
-import { logout } from "../modules/auth/auth.service.js";
+import {
+  logout,
+  loadAppUserFromFirebaseUser,
+} from "../modules/auth/auth.service.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 
 import { auth } from "../config/firebase.js";
-import { loadAppUserFromFirebaseUser } from "../modules/auth/auth.service.js";
+
+const routerMod = await import(attVersionedModuleUrl("./router.js", import.meta.url));
+const { renderRoute, navigate } = routerMod;
 
 export function bootstrapApp() {
-  // Bootstrap real: primero restaurar sesión Firebase Auth, luego renderizar.
-  // Evita “pantallazos” y asegura memoria entre refresh.
   onAuthStateChanged(auth, async (firebaseUser) => {
     try {
       if (firebaseUser) {
@@ -53,7 +59,10 @@ function bindGlobalEvents() {
   bindAuthEvents();
   bindReqEvents();
   bindUsersEvents();
-  bindClientesEvents();
+  // Clientes puede cambiar seguido; cargar versionado para evitar caché inconsistente del navegador.
+  import(attVersionedModuleUrl("../modules/clientes/clientes.controller.js", import.meta.url))
+    .then((m) => m.bindClientesEvents())
+    .catch((e) => console.error("[bootstrap] bindClientesEvents:", e));
   bindOperacionesEvents();
   bindCentralOperacionesEvents();
   bindBandejaCumplimientosEvents();

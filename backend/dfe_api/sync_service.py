@@ -207,14 +207,47 @@ def sync_cuit_into_firestore(
     }
 
 
-def list_enabled_clients(*, db, limit: int = 500) -> list[dict]:
+def cuit_digits(s: str | None) -> str:
+    """CUIT normalizado a 11 dígitos o cadena vacía."""
+    return _digits(s or "")
+
+
+def _legacy_dfe_clients_fallback_enabled() -> bool:
+    """Mientras exista `dfe_clients`, se puede unir como fuente secundaria (migración)."""
+    v = (os.environ.get("DFE_USE_LEGACY_DFE_CLIENTS") or "1").strip().lower()
+    if not v:
+        return True
+    return v not in ("0", "false", "no")
+
+
+def _list_enabled_from_clientes(db, limit: int) -> list[dict]:
+    """Fuente principal: `clientes` con `dfeEnabled == true` y CUIT válido."""
+    q = db.collection("clientes").where("dfeEnabled", "==", True).limit(limit)
+    out: list[dict] = []
+    for doc in q.stream():
+        d = doc.to_dict() or {}
+        c = _digits(d.get("cuit") or "")
+        if len(c) != 11:
+            continue
+        out.append(
+            {
+                "cuit": c,
+                "nombre": (d.get("nombre") or "").strip() or None,
+                "cliente_doc_id": doc.id,
+                "source": "clientes",
+            }
+        )
+    return out
+
+
+def _list_legacy_dfe_clients(db, limit: int) -> list[dict]:
     q = (
         db.collection("dfe_clients")
         .where("active", "==", True)
         .where("dfeEnabled", "==", True)
         .limit(limit)
     )
-    out = []
+    out: list[dict] = []
     for doc in q.stream():
         d = doc.to_dict() or {}
         c = _digits(d.get("cuit") or doc.id)
@@ -222,10 +255,104 @@ def list_enabled_clients(*, db, limit: int = 500) -> list[dict]:
             continue
         out.append(
             {
-                "id": doc.id,
                 "cuit": c,
-                "nombre": d.get("nombre") or d.get("nombreCliente") or None,
+                "nombre": (d.get("nombre") or d.get("nombreCliente") or "").strip() or None,
+                "cliente_doc_id": None,
+                "source": "dfe_clients_legacy",
             }
         )
     return out
+
+
+def list_enabled_clients(*, db, limit: int = 500) -> list[dict]:
+    """
+    Clientes a sincronizar en DFE.
+
+    - **Principal:** documentos en `clientes` con `dfeEnabled == true` (y CUIT de 11 dígitos).
+    - **Opcional (migración):** si `DFE_USE_LEGACY_DFE_CLIENTS` no es 0/false, se agregan CUITs
+      presentes solo en `dfe_clients` (activos y `dfeEnabled`), sin duplicar por CUIT.
+    """
+    primary = _list_enabled_from_clientes(db, limit)
+    by_cuit: dict[str, dict] = {c["cuit"]: c for c in primary}
+    if _legacy_dfe_clients_fallback_enabled():
+        for c in _list_legacy_dfe_clients(db, limit):
+            if c["cuit"] not in by_cuit:
+                by_cuit[c["cuit"]] = c
+    return list(by_cuit.values())
+
+
+def find_cliente_doc_ref_for_cuit(db, cuit_representada: str):
+    """
+    Devuelve la referencia al documento en `clientes` cuyo campo `cuit11` coincide (11 dígitos).
+    Si no hay `cuit11` persistido, no encuentra (guardar la ficha desde la app rellena `cuit11`).
+    """
+    cuit = _digits(cuit_representada)
+    if len(cuit) != 11:
+        return None
+    q = db.collection("clientes").where("cuit11", "==", cuit).limit(1)
+    for doc in q.stream():
+        return doc.reference
+    return None
+
+
+def write_sync_metadata_after_cuit_sync(
+    db,
+    *,
+    cuit: str,
+    nombre: str | None,
+    cliente_doc_id: str | None,
+    ok: bool,
+    err: str | None,
+    r: dict | None,
+    sync_source: str,
+    allow_lookup_cliente_by_cuit11: bool = False,
+) -> None:
+    """
+    Resultado de sync por CUIT: escribe en `clientes` (`dfeLastSync*`) si hay `cliente_doc_id`.
+    Si `allow_lookup_cliente_by_cuit11` (p. ej. sync manual por CUIT), intenta resolver el doc por `cuit11`.
+    Si no hay doc en `clientes`, mantiene compatibilidad escribiendo en `dfe_clients/{cuit}`.
+    """
+    r = r or {}
+    ts = firestore.SERVER_TIMESTAMP
+    err_s = None if ok else (err or "error")[:400]
+
+    payload = {
+        "dfeLastSyncAt": ts,
+        "dfeLastSyncOk": ok,
+        "dfeLastSyncError": err_s,
+        "dfeLastSyncFechaDesde": r.get("fechaDesde"),
+        "dfeLastSyncFechaHasta": r.get("fechaHasta"),
+        "dfeLastSyncWindowDays": r.get("windowDays"),
+        "dfeLastSyncUpserted": r.get("upserted"),
+        "dfeLastSyncSource": sync_source,
+    }
+
+    if cliente_doc_id:
+        db.collection("clientes").document(cliente_doc_id).set(payload, merge=True)
+        return
+
+    if allow_lookup_cliente_by_cuit11:
+        ref = find_cliente_doc_ref_for_cuit(db, cuit)
+        if ref is not None:
+            ref.set(payload, merge=True)
+            return
+
+    c = _digits(cuit)
+    db.collection("dfe_clients").document(c).set(
+        {
+            "cuit": c,
+            "nombre": nombre,
+            "dfeEnabled": True,
+            "active": True,
+            "lastSyncAt": ts,
+            "lastSyncOk": ok,
+            "lastSyncError": err_s,
+            "lastSyncFechaDesde": r.get("fechaDesde"),
+            "lastSyncFechaHasta": r.get("fechaHasta"),
+            "lastSyncWindowDays": r.get("windowDays"),
+            "lastSyncUpserted": r.get("upserted"),
+            "lastSyncSource": sync_source,
+        },
+        merge=True,
+    )
 

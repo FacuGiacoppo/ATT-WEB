@@ -3,7 +3,8 @@ import {
   fetchClientes,
   createCliente,
   updateCliente,
-  importClientesBatch
+  importClientesBatch,
+  isDfeEnabledValue,
 } from "./clientes.service.js";
 import {
   fetchContactos,
@@ -98,6 +99,12 @@ function hideImportProgress() {
 
 const ORGANISMOS = ["ARCA", "DGR", "ARBA", "AFIP", "AGIP", "Municipalidad", "Otro"];
 
+/** CUIT normalizado a 11 dígitos (para índice `cuit11` y sync DFE). */
+function cuit11FromRaw(cuit) {
+  const d = String(cuit || "").replace(/\D/g, "");
+  return d.length === 11 ? d : null;
+}
+
 function addAccesoRow() {
   const list = document.getElementById("accesos-list");
   if (!list) return;
@@ -156,6 +163,26 @@ function getFormPayload() {
 
   const g = id => document.getElementById(id)?.value?.trim() ?? "";
 
+  const cuitRaw = g("cf-cuit");
+  const c11 = cuit11FromRaw(cuitRaw);
+
+  const { selectedId, isNew, items } = appState.clientes ?? {};
+  const selectedCliente =
+    !isNew && selectedId ? (items ?? []).find((x) => x.id === selectedId) : null;
+  const canToggleDfe = (appState.session.user?.role === "superadmin");
+  let dfeEnabled;
+  if (canToggleDfe) {
+    const dfeCheckbox = document.getElementById("cf-dfe-enabled");
+    /** Si el DOM vino de caché vieja sin el input, no pisar Firestore con `false`. */
+    dfeEnabled =
+      dfeCheckbox != null
+        ? dfeCheckbox.checked === true
+        : isDfeEnabledValue(selectedCliente?.dfeEnabled);
+  } else {
+    /** Admin/colaborador no pueden cambiar DFE: conservar valor en Firestore. */
+    dfeEnabled = isDfeEnabledValue(selectedCliente?.dfeEnabled);
+  }
+
   return {
     id_cliente:            g("cf-id_cliente"),
     nombre:                g("cf-nombre"),
@@ -163,7 +190,9 @@ function getFormPayload() {
     ganancias:             g("cf-ganancias"),
     iva:                   g("cf-iva"),
     tipo_iibb:             g("cf-tipo_iibb"),
-    cuit:                  g("cf-cuit"),
+    cuit:                  cuitRaw,
+    cuit11:                c11,
+    dfeEnabled,
     mes_cierre:            g("cf-mes_cierre"),
     telefono:              g("cf-telefono"),
     direccion:             g("cf-direccion"),
@@ -294,6 +323,9 @@ async function handleImportExcel(file) {
         // Solo agrega notas si el Excel trae texto: así merge conserva las notas guardadas en la app
         if (notas) payload.notas = notas;
 
+        const c11 = cuit11FromRaw(payload.cuit);
+        if (c11) payload.cuit11 = c11;
+
         const docId =
           nombre
             .toLowerCase()
@@ -320,6 +352,8 @@ async function handleImportExcel(file) {
           direccion: "", jurisdiccion_domicilio: "", etiquetas: "",
           claves: "", updated_by: updatedBy
         };
+        const c11n = cuit11FromRaw(payload.cuit);
+        if (c11n) payload.cuit11 = c11n;
         const docId =
           nombre
             .toLowerCase()
